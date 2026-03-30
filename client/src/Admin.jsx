@@ -29,7 +29,7 @@ function StatCard({ label, value, color }) {
   )
 }
 
-function InquiryCard({ inquiry, password, onStatusChange }) {
+function InquiryCard({ inquiry, password, onStatusChange, onNotesSaved }) {
   const [open, setOpen]           = useState(false)
   const [notes, setNotes]         = useState(inquiry.admin_notes || '')
   const [savingNotes, setSaving]  = useState(false)
@@ -71,6 +71,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
     setSaving(false)
     setSavedNote(true)
     setNotes('')
+    onNotesSaved(inquiry.id)
     setTimeout(() => setSavedNote(false), 2000)
     loadActivity()
   }
@@ -249,6 +250,10 @@ export default function Admin({ onExit }) {
     setInquiries(prev => prev.map(i => i.id === id ? { ...i, status } : i))
   }
 
+  const handleNotesSaved = (id) => {
+    setInquiries(prev => prev.map(i => i.id === id ? { ...i, admin_notes: '' } : i))
+  }
+
   const filtered = filter === 'all' ? inquiries : inquiries.filter(i => (i.status || 'new') === filter)
 
   const byStatus = (s) => inquiries.filter(i => (i.status || 'new') === s).length
@@ -351,7 +356,7 @@ export default function Admin({ onExit }) {
               </div>
             ) : (
               filtered.map(inquiry => (
-                <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} />
+                <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} onNotesSaved={handleNotesSaved} />
               ))
             )}
           </>
