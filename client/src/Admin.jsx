@@ -303,13 +303,93 @@ export default function Admin({ onExit }) {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 48px' }}>
         {/* Stats */}
         {stats && (
-          <div style={{ display: 'flex', gap: '4px', marginBottom: '40px' }}>
-            <StatCard label="Total Visits"    value={stats.totalVisits}     />
-            <StatCard label="Total Inquiries" value={stats.totalInquiries}  />
-            <StatCard label="New"      value={byStatus('new')}      color="#3B8EFF" />
-            <StatCard label="Active"   value={byStatus('active')}   color="#F0A500" />
-            <StatCard label="Complete" value={byStatus('complete')} color="#00C07F" />
-          </div>
+          <>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+              <StatCard label="Total Visits"    value={stats.totalVisits}    />
+              <StatCard label="Unique IPs"      value={stats.uniqueIps}      />
+              <StatCard label="Total Inquiries" value={stats.totalInquiries} />
+              <StatCard label="New"      value={byStatus('new')}      color="#3B8EFF" />
+              <StatCard label="Active"   value={byStatus('active')}   color="#F0A500" />
+              <StatCard label="Complete" value={byStatus('complete')} color="#00C07F" />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '40px' }}>
+              {/* Visits by page */}
+              <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '16px' }}>Visits by Page</div>
+                {stats.byPage.map(row => {
+                  const pct = Math.round((row.count / stats.totalVisits) * 100)
+                  return (
+                    <div key={row.page} style={{ marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{row.page}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--signal)' }}>{row.count} <span style={{ color: 'var(--faint)' }}>({pct}%)</span></span>
+                      </div>
+                      <div style={{ height: '3px', background: 'var(--wire)', borderRadius: '1px' }}>
+                        <div style={{ height: '3px', width: `${pct}%`, background: 'var(--signal)', borderRadius: '1px' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Daily visits — last 14 days */}
+              <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '16px' }}>Daily Visits — Last 14 Days</div>
+                {stats.dailyVisits.length === 0 ? (
+                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--faint)' }}>No data yet.</div>
+                ) : (() => {
+                  const max = Math.max(...stats.dailyVisits.map(r => parseInt(r.count)))
+                  return stats.dailyVisits.map(row => {
+                    const pct = Math.round((parseInt(row.count) / max) * 100)
+                    const label = new Date(row.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                    return (
+                      <div key={row.day} style={{ marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--dim)' }}>{label}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)' }}>{row.count}</span>
+                        </div>
+                        <div style={{ height: '3px', background: 'var(--wire)', borderRadius: '1px' }}>
+                          <div style={{ height: '3px', width: `${pct}%`, background: 'var(--signal)', borderRadius: '1px' }} />
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+            </div>
+
+            {/* Recent visits */}
+            <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px', marginBottom: '40px' }}>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '16px' }}>Recent Visits</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'JetBrains Mono',monospace", fontSize: '11px' }}>
+                  <thead>
+                    <tr>
+                      {['Time', 'Page', 'IP', 'User Agent'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', color: 'var(--faint)', fontWeight: 400, paddingBottom: '10px', paddingRight: '24px', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '9px', borderBottom: '1px solid var(--wire)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.recentVisits.map((v, i) => {
+                      const ts = new Date(v.visited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      const ua = v.user_agent || '—'
+                      const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : ua.includes('curl') ? 'curl' : ua.slice(0, 40)
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--wire)' }}>
+                          <td style={{ padding: '8px 24px 8px 0', color: 'var(--faint)' }}>{ts}</td>
+                          <td style={{ padding: '8px 24px 8px 0', color: 'var(--signal)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{v.page}</td>
+                          <td style={{ padding: '8px 24px 8px 0', color: 'var(--dim)' }}>{v.ip || '—'}</td>
+                          <td style={{ padding: '8px 0', color: 'var(--faint)' }}>{browser}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Filter tabs */}

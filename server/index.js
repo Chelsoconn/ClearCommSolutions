@@ -224,15 +224,29 @@ app.get('/api/admin/inquiries', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
-    const [visitRows, inquiryRows, statusRows] = await Promise.all([
+    const [visitRows, inquiryRows, statusRows, uniqueIpRows, byPageRows, dailyRows, recentRows] = await Promise.all([
       pool.query('SELECT COUNT(*) AS total FROM visits'),
       pool.query('SELECT COUNT(*) AS total FROM inquiries'),
       pool.query("SELECT status, COUNT(*) AS count FROM inquiries GROUP BY status"),
+      pool.query('SELECT COUNT(DISTINCT ip) AS total FROM visits'),
+      pool.query('SELECT page, COUNT(*) AS count FROM visits GROUP BY page ORDER BY count DESC'),
+      pool.query(`
+        SELECT DATE_TRUNC('day', visited_at AT TIME ZONE 'America/Chicago') AS day,
+               COUNT(*) AS count
+        FROM visits
+        WHERE visited_at >= NOW() - INTERVAL '14 days'
+        GROUP BY day ORDER BY day ASC
+      `),
+      pool.query('SELECT ip, page, user_agent, visited_at FROM visits ORDER BY visited_at DESC LIMIT 20'),
     ]);
     res.json({
-      totalVisits: parseInt(visitRows.rows[0].total),
+      totalVisits:    parseInt(visitRows.rows[0].total),
       totalInquiries: parseInt(inquiryRows.rows[0].total),
-      byStatus: statusRows.rows,
+      uniqueIps:      parseInt(uniqueIpRows.rows[0].total),
+      byStatus:       statusRows.rows,
+      byPage:         byPageRows.rows,
+      dailyVisits:    dailyRows.rows,
+      recentVisits:   recentRows.rows,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats' });
