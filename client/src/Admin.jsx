@@ -51,6 +51,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
   }
 
   const updateStatus = async (status) => {
+    if ((inquiry.status || 'new') === status) return
     await fetch(`/api/admin/inquiries/${inquiry.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
