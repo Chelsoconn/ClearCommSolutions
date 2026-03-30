@@ -69,6 +69,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
     })
     setSaving(false)
     setSavedNote(true)
+    setNotes('')
     setTimeout(() => setSavedNote(false), 2000)
     loadActivity()
   }
