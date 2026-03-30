@@ -76,7 +76,7 @@ const mailer = nodemailer.createTransport({
   },
 });
 
-const EMAIL_RECIPIENTS = ['chelseaaoconnor1@gmail.com', 'brandon.oconnor54@gmail.com'];
+const EMAIL_RECIPIENTS = ['chelseaaoconnor1@gmail.com', 'brandon.oconnor54@gmail.com', 'deploy@clearcommsolutions.com'];
 
 function formatInquiryText(d) {
   return `
@@ -117,7 +117,7 @@ async function sendEmailNotification(d) {
 
 async function sendConfirmationEmail(d) {
   await mailer.sendMail({
-    from: `clearCommSolutions <${process.env.GMAIL_USER}>`,
+    from: `ClearComm Solutions <${process.env.GMAIL_USER}>`,
     to: d.email,
     subject: `We received your inquiry — ${d.refNum}`,
     text: `Hi ${d.firstName},
