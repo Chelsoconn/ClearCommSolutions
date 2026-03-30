@@ -95,7 +95,7 @@ NOTES
 
 async function sendEmailNotification(d) {
   await mailer.sendMail({
-    from: `ClearComm <${process.env.GMAIL_USER}>`,
+    from: `clearCommSolutions <${process.env.GMAIL_USER}>`,
     to: EMAIL_RECIPIENTS,
     subject: `New Inquiry ${d.refNum} — ${d.company} (${d.firstName} ${d.lastName})`,
     text: formatInquiryText(d),
