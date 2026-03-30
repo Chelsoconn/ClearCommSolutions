@@ -46,8 +46,12 @@ async function initDb() {
       crew_types  TEXT[],
       infra       TEXT[],
       notes       TEXT,
+      status      TEXT DEFAULT 'new',
+      admin_notes TEXT,
       created_at  TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';
+    ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS admin_notes TEXT;
   `);
   console.log('Database tables ready.');
 }
@@ -153,6 +157,69 @@ app.post('/api/inquiry', async (req, res) => {
   } catch (err) {
     console.error('Inquiry insert error:', err.message);
     res.status(500).json({ error: 'Failed to save inquiry' });
+  }
+});
+
+// Admin auth middleware
+function requireAdmin(req, res, next) {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/inquiries', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM inquiries ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Admin inquiries error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch inquiries' });
+  }
+});
+
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const [visitRows, inquiryRows, statusRows] = await Promise.all([
+      pool.query('SELECT COUNT(*) AS total FROM visits'),
+      pool.query('SELECT COUNT(*) AS total FROM inquiries'),
+      pool.query("SELECT status, COUNT(*) AS count FROM inquiries GROUP BY status"),
+    ]);
+    res.json({
+      totalVisits: parseInt(visitRows.rows[0].total),
+      totalInquiries: parseInt(inquiryRows.rows[0].total),
+      byStatus: statusRows.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+app.patch('/api/admin/inquiries/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    await pool.query('UPDATE inquiries SET status=$1 WHERE id=$2', [status, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+app.patch('/api/admin/inquiries/:id/notes', requireAdmin, async (req, res) => {
+  try {
+    const { adminNotes } = req.body;
+    await pool.query('UPDATE inquiries SET admin_notes=$1 WHERE id=$2', [adminNotes, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update notes' });
   }
 });
 

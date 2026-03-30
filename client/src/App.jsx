@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Admin from './Admin.jsx'
 
 function CheckOpt({ label, checked, onToggle }) {
   return (
@@ -167,7 +168,13 @@ export default function App() {
     window.scrollTo(0, 0)
   }
 
-  useEffect(() => { logVisit('home') }, [])
+  useEffect(() => {
+    if (window.location.pathname === '/admin') {
+      setPage('admin')
+    } else {
+      logVisit('home')
+    }
+  }, [])
 
   const scrollToId = (id) => {
     const el = document.getElementById(id)
@@ -278,6 +285,10 @@ export default function App() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (page === 'admin') {
+    return <Admin onExit={() => { setPage('home'); window.history.pushState({}, '', '/'); logVisit('home') }} />
   }
 
   return (
