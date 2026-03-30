@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
-import nodemailer from 'nodemailer';
+import postmark from 'postmark';
 
 dotenv.config();
 
@@ -67,14 +67,8 @@ async function initDb() {
 
 initDb().catch(err => console.error('DB init error:', err));
 
-// Email transporter
-const mailer = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+// Postmark client
+const mailer = new postmark.ServerClient(process.env.POSTMARK_SERVER_TOKEN);
 
 const EMAIL_RECIPIENTS = ['chelseaaoconnor1@gmail.com', 'brandon.oconnor54@gmail.com', 'deploy@clearcommsolutions.com'];
 
@@ -107,20 +101,22 @@ NOTES
 }
 
 async function sendEmailNotification(d) {
-  await mailer.sendMail({
-    from: `clearCommSolutions <${process.env.GMAIL_USER}>`,
-    to: EMAIL_RECIPIENTS,
-    subject: `New Inquiry ${d.refNum} — ${d.company} (${d.firstName} ${d.lastName})`,
-    text: formatInquiryText(d),
-  });
+  await mailer.sendEmailBatch(
+    EMAIL_RECIPIENTS.map(to => ({
+      From: 'ClearComm Solutions <deploy@clearcommsolutions.com>',
+      To: to,
+      Subject: `New Inquiry ${d.refNum} — ${d.company} (${d.firstName} ${d.lastName})`,
+      TextBody: formatInquiryText(d),
+    }))
+  );
 }
 
 async function sendConfirmationEmail(d) {
-  await mailer.sendMail({
-    from: `ClearComm Solutions <${process.env.GMAIL_USER}>`,
-    to: d.email,
-    subject: `We received your inquiry — ${d.refNum}`,
-    text: `Hi ${d.firstName},
+  await mailer.sendEmail({
+    From: 'ClearComm Solutions <deploy@clearcommsolutions.com>',
+    To: d.email,
+    Subject: `We received your inquiry — ${d.refNum}`,
+    TextBody: `Hi ${d.firstName},
 
 Thanks for reaching out to ClearComm. We've received your inquiry and will be in touch shortly.
 
