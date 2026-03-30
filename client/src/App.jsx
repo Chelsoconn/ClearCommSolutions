@@ -138,6 +138,8 @@ export default function App() {
   const [openCh, setOpenCh] = useState(null)
   const [selQty, setSelQty] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [refNum, setRefNum] = useState('')
   const [form, setForm] = useState({
     fname: '', lname: '', email: '', phone: '', company: '',
@@ -242,31 +244,40 @@ export default function App() {
 
   const submitForm = async () => {
     if (!validate()) return
+    setSubmitting(true)
+    setSubmitError(false)
     const ref = 'CC-' + Math.floor(100000 + Math.random() * 900000)
-    await fetch('/api/inquiry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        refNum: ref,
-        firstName: form.fname,
-        lastName: form.lname,
-        email: form.email,
-        phone: form.phone,
-        company: form.company,
-        jobTitle: form.jobtitle,
-        industry: form.industry,
-        location: form.location,
-        startDate: form.startdate,
-        duration: form.duration,
-        qty: selQty,
-        hazards: [...hazards],
-        crewTypes: [...crewTypes],
-        infra: [...infra],
-        notes: form.notes,
-      }),
-    }).catch(() => {})
-    setRefNum(ref)
-    setShowSuccess(true)
+    try {
+      const res = await fetch('/api/inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refNum: ref,
+          firstName: form.fname,
+          lastName: form.lname,
+          email: form.email,
+          phone: form.phone,
+          company: form.company,
+          jobTitle: form.jobtitle,
+          industry: form.industry,
+          location: form.location,
+          startDate: form.startdate,
+          duration: form.duration,
+          qty: selQty,
+          hazards: [...hazards],
+          crewTypes: [...crewTypes],
+          infra: [...infra],
+          notes: form.notes,
+        }),
+      })
+      if (!res.ok) throw new Error('Server error')
+      setRefNum(ref)
+      setShowSuccess(true)
+    } catch {
+      setSubmitError(true)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -786,10 +797,15 @@ export default function App() {
                   <textarea placeholder="Describe your operation: what crews are on site, any known hazardous areas, current communication issues, OSHA requirements you need to meet, or anything else we should know before designing your system..." value={form.notes} onChange={e => updateForm('notes', e.target.value)}></textarea>
                 </div>
                 <div className="submit-wrap">
-                  <button className="btn-submit" onClick={submitForm}>
+                  <button className="btn-submit" onClick={submitForm} disabled={submitting}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-                    Submit Deployment Quote Request
+                    {submitting ? 'Submitting...' : 'Submit Deployment Quote Request'}
                   </button>
+                  {submitError && (
+                    <div className="ferr show" style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      Something went wrong. Please try again or call 1-800-CLR-COMM.
+                    </div>
+                  )}
                   <div className="submit-note">A ClearComm deployment specialist will respond within 4 business hours. Your information is never shared or sold. No commitment required.</div>
                 </div>
               </div>

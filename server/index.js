@@ -61,32 +61,42 @@ app.use(express.json());
 
 // Log a page visit
 app.post('/api/visit', async (req, res) => {
-  const { page } = req.body;
-  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
-  const userAgent = req.headers['user-agent'] || null;
-  await pool.query(
-    'INSERT INTO visits (page, ip, user_agent) VALUES ($1, $2, $3)',
-    [page, ip, userAgent]
-  );
-  res.json({ ok: true });
+  try {
+    const { page } = req.body;
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || null;
+    await pool.query(
+      'INSERT INTO visits (page, ip, user_agent) VALUES ($1, $2, $3)',
+      [page, ip, userAgent]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Visit insert error:', err.message);
+    res.status(500).json({ error: 'Failed to log visit' });
+  }
 });
 
 // Submit a quote inquiry
 app.post('/api/inquiry', async (req, res) => {
-  const {
-    refNum, firstName, lastName, email, phone, company, jobTitle,
-    industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes
-  } = req.body;
+  try {
+    const {
+      refNum, firstName, lastName, email, phone, company, jobTitle,
+      industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes
+    } = req.body;
 
-  await pool.query(
-    `INSERT INTO inquiries
-      (ref_num, first_name, last_name, email, phone, company, job_title,
-       industry, location, start_date, duration, qty, hazards, crew_types, infra, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-    [refNum, firstName, lastName, email, phone, company, jobTitle,
-     industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes]
-  );
-  res.json({ ok: true });
+    await pool.query(
+      `INSERT INTO inquiries
+        (ref_num, first_name, last_name, email, phone, company, job_title,
+         industry, location, start_date, duration, qty, hazards, crew_types, infra, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [refNum, firstName, lastName, email, phone, company, jobTitle,
+       industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Inquiry insert error:', err.message);
+    res.status(500).json({ error: 'Failed to save inquiry' });
+  }
 });
 
 app.get('/api/health', (req, res) => {
