@@ -280,6 +280,12 @@ export default function App() {
       if (!res.ok) throw new Error('Server error')
       setRefNum(ref)
       setShowSuccess(true)
+      setForm({ fname: '', lname: '', email: '', phone: '', company: '', jobtitle: '', industry: '', location: '', startdate: '', duration: '', notes: '' })
+      setSelQty('')
+      setHazards(new Set())
+      setCrewTypes(new Set())
+      setInfra(new Set())
+      setErrors({})
     } catch {
       setSubmitError(true)
     } finally {

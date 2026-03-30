@@ -106,6 +106,32 @@ async function sendEmailNotification(d) {
   });
 }
 
+async function sendConfirmationEmail(d) {
+  await mailer.sendMail({
+    from: `clearCommSolutions <${process.env.GMAIL_USER}>`,
+    to: d.email,
+    subject: `We received your inquiry — ${d.refNum}`,
+    text: `Hi ${d.firstName},
+
+Thanks for reaching out to ClearComm. We've received your inquiry and will be in touch shortly.
+
+Your reference number is: ${d.refNum}
+
+Here's a summary of what you submitted:
+
+  Company:    ${d.company}
+  Location:   ${d.location}
+  Start Date: ${d.startDate}
+  Duration:   ${d.duration}
+  Devices:    ${d.qty}
+
+If you have any questions in the meantime, just reply to this email.
+
+— The ClearComm Team
+`.trim(),
+  });
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -152,6 +178,7 @@ app.post('/api/inquiry', async (req, res) => {
       industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes };
 
     sendEmailNotification(notifData).catch(err => console.error('Email error:', err.message));
+    sendConfirmationEmail(notifData).catch(err => console.error('Confirmation email error:', err.message));
 
     res.json({ ok: true });
   } catch (err) {
