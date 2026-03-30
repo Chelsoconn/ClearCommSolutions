@@ -34,6 +34,21 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
   const [notes, setNotes]         = useState(inquiry.admin_notes || '')
   const [savingNotes, setSaving]  = useState(false)
   const [savedNote, setSavedNote] = useState(false)
+  const [activity, setActivity]   = useState(null)
+
+  const loadActivity = async () => {
+    const res = await fetch(`/api/admin/inquiries/${inquiry.id}/activity`, {
+      headers: { 'x-admin-password': password },
+    })
+    const data = await res.json()
+    setActivity(Array.isArray(data) ? data : [])
+  }
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && activity === null) loadActivity()
+  }
 
   const updateStatus = async (status) => {
     await fetch(`/api/admin/inquiries/${inquiry.id}/status`, {
@@ -42,6 +57,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
       body: JSON.stringify({ status }),
     })
     onStatusChange(inquiry.id, status)
+    loadActivity()
   }
 
   const saveNotes = async () => {
@@ -54,6 +70,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
     setSaving(false)
     setSavedNote(true)
     setTimeout(() => setSavedNote(false), 2000)
+    loadActivity()
   }
 
   const d = inquiry
@@ -62,7 +79,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
   return (
     <div style={{ background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '4px', transition: 'border-color 0.2s', borderColor: open ? 'var(--sigborder)' : undefined }}>
       {/* Header row */}
-      <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+      <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }} onClick={toggle}>
         <StatusBadge status={d.status || 'new'} />
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', letterSpacing: '0.08em', color: 'var(--text)', marginBottom: '3px' }}>
@@ -130,7 +147,7 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
           </div>
 
           {/* Status buttons */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '28px' }}>
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px' }}>Set Status:</span>
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
               <button key={key} onClick={() => updateStatus(key)} style={{
@@ -142,6 +159,34 @@ function InquiryCard({ inquiry, password, onStatusChange }) {
               }}>{cfg.label}</button>
             ))}
           </div>
+
+          {/* Activity log */}
+          {activity && activity.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--wire)', paddingTop: '20px' }}>
+              <div style={sectionLabel}>Activity Log</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {activity.map(row => {
+                  const ts = new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  const isStatus = row.action_type === 'status_change'
+                  const cfg = isStatus ? STATUS_CONFIG[row.value] : null
+                  return (
+                    <div key={row.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: '12px' }}>
+                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)', flexShrink: 0, minWidth: '160px' }}>{ts}</span>
+                      {isStatus ? (
+                        <span style={{ color: 'var(--dim)' }}>
+                          Status set to <span style={{ color: cfg?.color || 'var(--signal)', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', textTransform: 'uppercase' }}>{row.value}</span>
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--dim)' }}>
+                          Note saved: <span style={{ color: 'var(--text)', fontStyle: 'italic' }}>"{row.value?.slice(0, 80)}{row.value?.length > 80 ? '…' : ''}"</span>
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

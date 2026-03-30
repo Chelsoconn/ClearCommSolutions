@@ -52,6 +52,15 @@ async function initDb() {
     );
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+
+    CREATE TABLE IF NOT EXISTS admin_activity (
+      id           SERIAL PRIMARY KEY,
+      inquiry_id   INTEGER NOT NULL REFERENCES inquiries(id) ON DELETE CASCADE,
+      ref_num      TEXT NOT NULL,
+      action_type  TEXT NOT NULL,
+      value        TEXT,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
   console.log('Database tables ready.');
 }
@@ -233,7 +242,13 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
 app.patch('/api/admin/inquiries/:id/status', requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
-    await pool.query('UPDATE inquiries SET status=$1 WHERE id=$2', [status, req.params.id]);
+    const { rows } = await pool.query('UPDATE inquiries SET status=$1 WHERE id=$2 RETURNING ref_num', [status, req.params.id]);
+    if (rows.length) {
+      await pool.query(
+        'INSERT INTO admin_activity (inquiry_id, ref_num, action_type, value) VALUES ($1,$2,$3,$4)',
+        [req.params.id, rows[0].ref_num, 'status_change', status]
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update status' });
@@ -243,10 +258,28 @@ app.patch('/api/admin/inquiries/:id/status', requireAdmin, async (req, res) => {
 app.patch('/api/admin/inquiries/:id/notes', requireAdmin, async (req, res) => {
   try {
     const { adminNotes } = req.body;
-    await pool.query('UPDATE inquiries SET admin_notes=$1 WHERE id=$2', [adminNotes, req.params.id]);
+    const { rows } = await pool.query('UPDATE inquiries SET admin_notes=$1 WHERE id=$2 RETURNING ref_num', [adminNotes, req.params.id]);
+    if (rows.length) {
+      await pool.query(
+        'INSERT INTO admin_activity (inquiry_id, ref_num, action_type, value) VALUES ($1,$2,$3,$4)',
+        [req.params.id, rows[0].ref_num, 'note_saved', adminNotes]
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update notes' });
+  }
+});
+
+app.get('/api/admin/inquiries/:id/activity', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM admin_activity WHERE inquiry_id=$1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity' });
   }
 });
 
