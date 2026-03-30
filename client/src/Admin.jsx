@@ -217,6 +217,7 @@ export default function Admin({ onExit }) {
   const [stats, setStats]           = useState(null)
   const [loading, setLoading]       = useState(false)
   const [filter, setFilter]         = useState('all')
+  const [view, setView]             = useState('inquiries')
 
   const load = useCallback(async (pass) => {
     setLoading(true)
@@ -289,10 +290,23 @@ export default function Admin({ onExit }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ink)', paddingTop: '68px', paddingBottom: '40px' }}>
       {/* Dashboard header */}
-      <div style={{ background: 'var(--ink2)', borderBottom: '1px solid var(--wire)', padding: '28px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--signal)', marginBottom: '6px' }}>// Admin Dashboard</div>
-          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '36px', color: 'var(--text)', lineHeight: 1 }}>Inquiries</div>
+      <div style={{ background: 'var(--ink2)', borderBottom: '1px solid var(--wire)', padding: '20px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+          <div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--signal)', marginBottom: '4px' }}>// Admin Dashboard</div>
+            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '32px', color: 'var(--text)', lineHeight: 1 }}>ClearComm</div>
+          </div>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {[['inquiries', 'Inquiries'], ['analytics', 'Analytics']].map(([key, label]) => (
+              <button key={key} onClick={() => setView(key)} style={{
+                background: view === key ? 'var(--signal)' : 'transparent',
+                color: view === key ? '#000' : 'var(--dim)',
+                border: '1px solid var(--wire)', padding: '9px 22px',
+                fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
+                letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+              }}>{label}</button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => load(password)} style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--dim)', padding: '9px 18px', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>↻ Refresh</button>
@@ -301,19 +315,57 @@ export default function Admin({ onExit }) {
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 48px' }}>
-        {/* Stats */}
-        {stats && (
+
+        {view === 'inquiries' && (
           <>
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-              <StatCard label="Total Visits"    value={stats.totalVisits}    />
-              <StatCard label="Unique IPs"      value={stats.uniqueIps}      />
-              <StatCard label="Total Inquiries" value={stats.totalInquiries} />
-              <StatCard label="New"      value={byStatus('new')}      color="#3B8EFF" />
-              <StatCard label="Active"   value={byStatus('active')}   color="#F0A500" />
-              <StatCard label="Complete" value={byStatus('complete')} color="#00C07F" />
+            {/* Inquiry summary cards */}
+            {stats && (
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '32px' }}>
+                <StatCard label="Total Inquiries" value={stats.totalInquiries} />
+                <StatCard label="New"      value={byStatus('new')}      color="#3B8EFF" />
+                <StatCard label="Active"   value={byStatus('active')}   color="#F0A500" />
+                <StatCard label="Complete" value={byStatus('complete')} color="#00C07F" />
+              </div>
+            )}
+
+            {/* Filter tabs */}
+            <div style={{ display: 'flex', gap: '2px', marginBottom: '20px' }}>
+              {['all', 'new', 'active', 'complete'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} style={{
+                  background: filter === f ? 'var(--signal)' : 'var(--ink3)',
+                  color: filter === f ? '#000' : 'var(--dim)',
+                  border: '1px solid var(--wire)', padding: '8px 20px',
+                  fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
+                  letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                }}>
+                  {f === 'all' ? `All (${inquiries.length})` : `${f} (${byStatus(f)})`}
+                </button>
+              ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '40px' }}>
+            {loading ? (
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--dim)', padding: '40px 0', textAlign: 'center' }}>Loading...</div>
+            ) : filtered.length === 0 ? (
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
+                No inquiries{filter !== 'all' ? ` with status "${filter}"` : ''} yet.
+              </div>
+            ) : (
+              filtered.map(inquiry => (
+                <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} />
+              ))
+            )}
+          </>
+        )}
+
+        {view === 'analytics' && stats && (
+          <>
+            {/* Visit stat cards */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+              <StatCard label="Total Visits" value={stats.totalVisits} />
+              <StatCard label="Unique IPs"   value={stats.uniqueIps}   />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '4px' }}>
               {/* Visits by page */}
               <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px' }}>
                 <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '16px' }}>Visits by Page</div>
@@ -359,14 +411,14 @@ export default function Admin({ onExit }) {
               </div>
             </div>
 
-            {/* Recent visits */}
-            <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px', marginBottom: '40px' }}>
+            {/* Recent visits table */}
+            <div style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '24px 28px' }}>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '16px' }}>Recent Visits</div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'JetBrains Mono',monospace", fontSize: '11px' }}>
                   <thead>
                     <tr>
-                      {['Time', 'Page', 'IP', 'User Agent'].map(h => (
+                      {['Time', 'Page', 'IP', 'Browser'].map(h => (
                         <th key={h} style={{ textAlign: 'left', color: 'var(--faint)', fontWeight: 400, paddingBottom: '10px', paddingRight: '24px', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '9px', borderBottom: '1px solid var(--wire)' }}>{h}</th>
                       ))}
                     </tr>
@@ -390,34 +442,6 @@ export default function Admin({ onExit }) {
               </div>
             </div>
           </>
-        )}
-
-        {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: '2px', marginBottom: '20px' }}>
-          {['all', 'new', 'active', 'complete'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              background: filter === f ? 'var(--signal)' : 'var(--ink3)',
-              color: filter === f ? '#000' : 'var(--dim)',
-              border: '1px solid var(--wire)', padding: '8px 20px',
-              fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
-              letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-            }}>
-              {f === 'all' ? `All (${inquiries.length})` : `${f} (${byStatus(f)})`}
-            </button>
-          ))}
-        </div>
-
-        {/* Inquiry list */}
-        {loading ? (
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--dim)', padding: '40px 0', textAlign: 'center' }}>Loading...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
-            No inquiries{filter !== 'all' ? ` with status "${filter}"` : ''} yet.
-          </div>
-        ) : (
-          filtered.map(inquiry => (
-            <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} />
-          ))
         )}
       </div>
     </div>
