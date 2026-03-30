@@ -151,10 +151,21 @@ export default function App() {
   const waveRefs = useRef({})
   const lastWaveRef = useRef(-1)
 
+  const logVisit = (pageName) => {
+    fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: pageName }),
+    }).catch(() => {})
+  }
+
   const goPage = (id) => {
     setPage(id)
+    logVisit(id)
     window.scrollTo(0, 0)
   }
+
+  useEffect(() => { logVisit('home') }, [])
 
   const scrollToId = (id) => {
     const el = document.getElementById(id)
@@ -229,9 +240,31 @@ export default function App() {
     return Object.keys(errs).length === 0
   }
 
-  const submitForm = () => {
+  const submitForm = async () => {
     if (!validate()) return
     const ref = 'CC-' + Math.floor(100000 + Math.random() * 900000)
+    await fetch('/api/inquiry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refNum: ref,
+        firstName: form.fname,
+        lastName: form.lname,
+        email: form.email,
+        phone: form.phone,
+        company: form.company,
+        jobTitle: form.jobtitle,
+        industry: form.industry,
+        location: form.location,
+        startDate: form.startdate,
+        duration: form.duration,
+        qty: selQty,
+        hazards: [...hazards],
+        crewTypes: [...crewTypes],
+        infra: [...infra],
+        notes: form.notes,
+      }),
+    }).catch(() => {})
     setRefNum(ref)
     setShowSuccess(true)
   }
