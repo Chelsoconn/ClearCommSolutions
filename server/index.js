@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
+import nodemailer from 'nodemailer';
+import twilio from 'twilio';
 
 dotenv.config();
 
@@ -53,6 +55,81 @@ async function initDb() {
 
 initDb().catch(err => console.error('DB init error:', err));
 
+// Email transporter
+const mailer = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
+
+// Twilio client
+const smsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+const EMAIL_RECIPIENTS = ['chelseaaoconnor1@gmail.com', 'brandon.oconnor54@gmail.com'];
+const SMS_RECIPIENTS   = ['+12105875118', '+14324661020'];
+
+function formatInquiryText(d) {
+  return `
+NEW CLEARCOMM INQUIRY — ${d.refNum}
+
+CONTACT
+  Name:     ${d.firstName} ${d.lastName}
+  Email:    ${d.email}
+  Phone:    ${d.phone}
+  Company:  ${d.company}
+  Title:    ${d.jobTitle || '—'}
+
+PROJECT
+  Industry:   ${d.industry}
+  Location:   ${d.location}
+  Start Date: ${d.startDate}
+  Duration:   ${d.duration}
+
+REQUIREMENTS
+  Device Count:  ${d.qty}
+  Hazard Class:  ${d.hazards?.length ? d.hazards.join(', ') : 'None selected'}
+  Crew Types:    ${d.crewTypes?.length ? d.crewTypes.join(', ') : 'None selected'}
+  Infrastructure:${d.infra?.length ? d.infra.join(', ') : 'None selected'}
+
+NOTES
+  ${d.notes || 'None'}
+`.trim();
+}
+
+async function sendEmailNotification(d) {
+  await mailer.sendMail({
+    from: `ClearComm <${process.env.GMAIL_USER}>`,
+    to: EMAIL_RECIPIENTS,
+    subject: `New Inquiry ${d.refNum} — ${d.company} (${d.firstName} ${d.lastName})`,
+    text: formatInquiryText(d),
+  });
+}
+
+async function sendSmsNotification(d) {
+  const body =
+    `ClearComm Inquiry ${d.refNum}\n` +
+    `${d.firstName} ${d.lastName} — ${d.company}\n` +
+    `Phone: ${d.phone}\n` +
+    `Email: ${d.email}\n` +
+    `Industry: ${d.industry}\n` +
+    `Location: ${d.location}\n` +
+    `Start: ${d.startDate} | Duration: ${d.duration}\n` +
+    `Devices: ${d.qty}\n` +
+    (d.notes ? `Notes: ${d.notes.slice(0, 200)}` : '');
+
+  await Promise.all(
+    SMS_RECIPIENTS.map(to =>
+      smsClient.messages.create({
+        body,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to,
+      })
+    )
+  );
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -92,6 +169,16 @@ app.post('/api/inquiry', async (req, res) => {
       [refNum, firstName, lastName, email, phone, company, jobTitle,
        industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes]
     );
+
+    // Fire notifications in parallel — don't block the response
+    const notifData = { refNum, firstName, lastName, email, phone, company, jobTitle,
+      industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes };
+
+    Promise.all([
+      sendEmailNotification(notifData).catch(err => console.error('Email error:', err.message)),
+      sendSmsNotification(notifData).catch(err => console.error('SMS error:', err.message)),
+    ]);
+
     res.json({ ok: true });
   } catch (err) {
     console.error('Inquiry insert error:', err.message);
