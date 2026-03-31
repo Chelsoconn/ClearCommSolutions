@@ -302,10 +302,14 @@ function InvoicePanel({ inquiry, password }) {
     if (r.ok) {
       setSentMsg(`Sent to ${data.sentTo}`)
       if (type === 'alt') { setShowAltEmail(false); setAltEmail('') }
-      setTimeout(() => setSentMsg(null), 5000)
+      setTimeout(() => setSentMsg(null), 6000)
     } else {
-      setSentMsg('Send failed — check server logs')
-      setTimeout(() => setSentMsg(null), 5000)
+      const msg = data.error || 'Send failed'
+      const friendly = msg.includes('pending approval')
+        ? 'Postmark account pending approval — can only send to @clearcommsolutions.com until approved at postmarkapp.com'
+        : msg
+      setSentMsg(friendly)
+      setTimeout(() => setSentMsg(null), 12000)
     }
   }
 

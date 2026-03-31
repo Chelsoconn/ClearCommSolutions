@@ -562,7 +562,7 @@ app.post('/api/admin/invoices/:id/send-invoice', requireAdmin, async (req, res) 
     res.json({ ok: true, sentTo: toEmail });
   } catch (err) {
     console.error('Send invoice error:', err.message);
-    res.status(500).json({ error: 'Failed to send invoice' });
+    res.status(500).json({ error: err.message || 'Failed to send invoice' });
   }
 });
 
@@ -584,7 +584,7 @@ app.post('/api/admin/invoices/:id/send-receipt', requireAdmin, async (req, res) 
     res.json({ ok: true, sentTo: toEmail });
   } catch (err) {
     console.error('Send receipt error:', err.message);
-    res.status(500).json({ error: 'Failed to send receipt' });
+    res.status(500).json({ error: err.message || 'Failed to send receipt' });
   }
 });
 
