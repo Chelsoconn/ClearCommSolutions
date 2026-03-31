@@ -485,19 +485,23 @@ export default function Admin({ onExit }) {
   const [loginErr, setLoginErr]     = useState(false)
   const [inquiries, setInquiries]   = useState([])
   const [stats, setStats]           = useState(null)
-  const [loading, setLoading]       = useState(false)
-  const [filter, setFilter]         = useState('all')
-  const [view, setView]             = useState('inquiries')
-  const [listMode, setListMode]     = useState('list')
+  const [loading, setLoading]           = useState(false)
+  const [filter, setFilter]             = useState('all')
+  const [view, setView]                 = useState('inquiries')
+  const [listMode, setListMode]         = useState('list')
+  const [invoiceRecords, setInvoiceRecords] = useState([])
+  const [invoiceFilter, setInvoiceFilter]   = useState('pending')
 
   const load = useCallback(async (pass) => {
     setLoading(true)
-    const [iq, st] = await Promise.all([
-      fetch('/api/admin/inquiries', { headers: { 'x-admin-password': pass } }).then(r => r.json()),
-      fetch('/api/admin/stats',     { headers: { 'x-admin-password': pass } }).then(r => r.json()),
+    const [iq, st, invs] = await Promise.all([
+      fetch('/api/admin/inquiries',  { headers: { 'x-admin-password': pass } }).then(r => r.json()),
+      fetch('/api/admin/stats',      { headers: { 'x-admin-password': pass } }).then(r => r.json()),
+      fetch('/api/admin/invoices',   { headers: { 'x-admin-password': pass } }).then(r => r.json()),
     ])
     setInquiries(Array.isArray(iq) ? iq : [])
     setStats(st.error ? null : st)
+    setInvoiceRecords(Array.isArray(invs) ? invs : [])
     setLoading(false)
   }, [])
 
@@ -597,7 +601,7 @@ export default function Admin({ onExit }) {
             <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '32px', color: 'var(--text)', lineHeight: 1 }}>ClearComm</div>
           </div>
           <div style={{ display: 'flex', gap: '2px' }}>
-            {[['inquiries', 'Inquiries'], ['analytics', 'Analytics']].map(([key, label]) => (
+            {[['inquiries', 'Inquiries'], ['invoices', 'Invoices'], ['analytics', 'Analytics']].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} style={{
                 background: view === key ? 'var(--signal)' : 'transparent',
                 color: view === key ? '#000' : 'var(--dim)',
@@ -673,6 +677,106 @@ export default function Admin({ onExit }) {
             )}
           </>
         )}
+
+        {view === 'invoices' && (() => {
+          const categorize = (r) => {
+            if (r.paid) return 'paid'
+            if ((r.status || 'new') === 'complete') return 'unpaid'
+            if ((r.status || 'new') === 'active') return 'active'
+            return 'pending'
+          }
+          const INVOICE_TABS = [
+            { key: 'pending', label: 'Sent · Pending',      color: '#3B8EFF' },
+            { key: 'active',  label: 'Active Jobs',          color: '#F0A500' },
+            { key: 'unpaid',  label: 'Complete · Unpaid',    color: '#E84040' },
+            { key: 'paid',    label: 'Paid',                 color: '#00C07F' },
+          ]
+          const filtered = invoiceRecords.filter(r => categorize(r) === invoiceFilter)
+          const countOf = (k) => invoiceRecords.filter(r => categorize(r) === k).length
+
+          return (
+            <>
+              <div style={{ display: 'flex', gap: '2px', marginBottom: '28px' }}>
+                {INVOICE_TABS.map(({ key, label, color }) => (
+                  <button key={key} onClick={() => setInvoiceFilter(key)} style={{
+                    background: invoiceFilter === key ? color : 'var(--ink3)',
+                    color: invoiceFilter === key ? '#000' : 'var(--dim)',
+                    border: `1px solid ${invoiceFilter === key ? color : 'var(--wire)'}`,
+                    padding: '9px 22px', fontFamily: "'JetBrains Mono',monospace",
+                    fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  }}>{label} ({countOf(key)})</button>
+                ))}
+              </div>
+
+              {filtered.length === 0 ? (
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
+                  No records in this category.
+                </div>
+              ) : (
+                <div>
+                  {/* Header */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
+                    <span>Company / Contact</span>
+                    <span>Job</span>
+                    <span>Day Rate</span>
+                    <span>Days</span>
+                    <span>Total</span>
+                    <span>Net</span>
+                    <span>Due / Paid</span>
+                  </div>
+                  {filtered.map((r, i) => {
+                    const cost    = parseFloat(r.cost || 0)
+                    const disc    = parseFloat(r.promo_amount || 0)
+                    const net     = cost - disc
+                    const tabCfg  = INVOICE_TABS.find(t => t.key === categorize(r))
+                    return (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '13px 16px', background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '3px', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)', marginBottom: '2px' }}>{r.company}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{r.first_name} {r.last_name} · {r.ref_num}</div>
+                        </div>
+                        <div>
+                          {r.job_id && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)', marginBottom: '2px' }}>{r.job_id}</div>}
+                          {r.job_number && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--dim)' }}>#{r.job_number}</div>}
+                          {!r.job_id && !r.job_number && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>—</span>}
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+                          {r.daily_rate ? `$${parseFloat(r.daily_rate).toFixed(2)}` : '—'}
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+                          {r.total_days || '—'}
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)' }}>
+                          {r.cost ? `$${cost.toFixed(2)}` : '—'}
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: r.promo_amount ? 'var(--signal)' : 'var(--dim)' }}>
+                          {r.cost ? `$${net.toFixed(2)}` : '—'}
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: tabCfg?.color || 'var(--faint)' }}>
+                          {r.paid && r.paid_date ? r.paid_date.slice(0,10) : r.due_date ? `Due ${r.due_date.slice(0,10)}` : '—'}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Totals row */}
+                  {filtered.some(r => r.cost) && (() => {
+                    const totalCost = filtered.reduce((s, r) => s + parseFloat(r.cost || 0), 0)
+                    const totalNet  = filtered.reduce((s, r) => s + (parseFloat(r.cost || 0) - parseFloat(r.promo_amount || 0)), 0)
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '13px 16px', borderTop: '1px solid var(--wire)', marginTop: '4px' }}>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', gridColumn: '1 / 5', textAlign: 'right' }}>Totals</div>
+                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)' }}>${totalCost.toFixed(2)}</div>
+                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--signal)' }}>${totalNet.toFixed(2)}</div>
+                        <div />
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {view === 'analytics' && stats && (
           <>

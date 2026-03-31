@@ -315,6 +315,35 @@ app.get('/api/admin/inquiries/:id/activity', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/invoices', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        i.id, i.status, i.ref_num, i.first_name, i.last_name, i.company,
+        i.industry, i.location, i.start_date, i.created_at,
+        inv.id          AS inv_id,
+        inv.job_id,
+        inv.job_number,
+        inv.invoice_date,
+        inv.due_date,
+        inv.daily_rate,
+        inv.total_days,
+        inv.cost,
+        inv.promo,
+        inv.promo_amount,
+        inv.paid,
+        inv.paid_date,
+        inv.notes       AS inv_notes
+      FROM inquiries i
+      LEFT JOIN invoices inv ON inv.inquiry_id = i.id
+      ORDER BY i.created_at DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
 app.get('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM invoices WHERE inquiry_id=$1 LIMIT 1', [req.params.id]);
