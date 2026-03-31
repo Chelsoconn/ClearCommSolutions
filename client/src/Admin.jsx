@@ -210,6 +210,54 @@ function Row({ k, v }) {
   )
 }
 
+function CompanyGroup({ company, jobs, password, onStatusChange, onNotesSaved, emailFlags }) {
+  const [open, setOpen] = useState(false)
+  const statuses = ['new', 'active', 'complete']
+  const counts = Object.fromEntries(statuses.map(s => [s, jobs.filter(j => (j.status || 'new') === s).length]))
+  const emails = [...new Set(jobs.map(j => j.email).filter(Boolean))]
+  const flaggedEmails = emails.filter(e => emailFlags.has(e))
+
+  return (
+    <div style={{ background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '4px' }}>
+      <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+            <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)', letterSpacing: '0.04em' }}>{company}</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)', background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '2px 8px' }}>
+              {jobs.length} job{jobs.length !== 1 ? 's' : ''}
+            </span>
+            {flaggedEmails.length > 0 && (
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: '#F0A500', background: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.35)', padding: '2px 8px', letterSpacing: '0.08em' }}>
+                ⚑ shared contact
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {statuses.map(s => counts[s] > 0 && (
+              <span key={s} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.08em', color: STATUS_CONFIG[s].color }}>
+                {counts[s]} {s}
+              </span>
+            ))}
+            <span style={{ color: 'var(--wire)', fontSize: '10px' }}>·</span>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: '12px', color: 'var(--faint)' }}>
+              {emails.join(', ')}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>{open ? '▴' : '▾'}</div>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: '1px solid var(--wire)', padding: '4px 16px 16px' }}>
+          {jobs.map(inquiry => (
+            <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={onStatusChange} onNotesSaved={onNotesSaved} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Admin({ onExit }) {
   const [authed, setAuthed]         = useState(false)
   const [password, setPassword]     = useState('')
@@ -219,6 +267,7 @@ export default function Admin({ onExit }) {
   const [loading, setLoading]       = useState(false)
   const [filter, setFilter]         = useState('all')
   const [view, setView]             = useState('inquiries')
+  const [listMode, setListMode]     = useState('list')
 
   const load = useCallback(async (pass) => {
     setLoading(true)
@@ -257,6 +306,31 @@ export default function Admin({ onExit }) {
   const filtered = filter === 'all' ? inquiries : inquiries.filter(i => (i.status || 'new') === filter)
 
   const byStatus = (s) => inquiries.filter(i => (i.status || 'new') === s).length
+
+  // Build company groups from filtered inquiries
+  const companyGroups = (() => {
+    const map = {}
+    filtered.forEach(inq => {
+      const key = (inq.company || 'Unknown').toLowerCase().trim()
+      if (!map[key]) map[key] = { name: inq.company || 'Unknown', jobs: [] }
+      map[key].jobs.push(inq)
+    })
+    return Object.values(map).sort((a, b) =>
+      new Date(b.jobs[0].created_at) - new Date(a.jobs[0].created_at)
+    )
+  })()
+
+  // Find emails that appear across more than one company
+  const emailFlags = (() => {
+    const emailToCompanies = {}
+    inquiries.forEach(inq => {
+      if (!inq.email) return
+      const co = (inq.company || '').toLowerCase().trim()
+      if (!emailToCompanies[inq.email]) emailToCompanies[inq.email] = new Set()
+      emailToCompanies[inq.email].add(co)
+    })
+    return new Set(Object.entries(emailToCompanies).filter(([, s]) => s.size > 1).map(([e]) => e))
+  })()
 
   if (!authed) {
     return (
@@ -333,19 +407,32 @@ export default function Admin({ onExit }) {
               </div>
             )}
 
-            {/* Filter tabs */}
-            <div style={{ display: 'flex', gap: '2px', marginBottom: '20px' }}>
-              {['all', 'new', 'active', 'complete'].map(f => (
-                <button key={f} onClick={() => setFilter(f)} style={{
-                  background: filter === f ? 'var(--signal)' : 'var(--ink3)',
-                  color: filter === f ? '#000' : 'var(--dim)',
-                  border: '1px solid var(--wire)', padding: '8px 20px',
-                  fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
-                  letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-                }}>
-                  {f === 'all' ? `All (${inquiries.length})` : `${f} (${byStatus(f)})`}
-                </button>
-              ))}
+            {/* Filter + mode row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', gap: '2px' }}>
+                {['all', 'new', 'active', 'complete'].map(f => (
+                  <button key={f} onClick={() => setFilter(f)} style={{
+                    background: filter === f ? 'var(--signal)' : 'var(--ink3)',
+                    color: filter === f ? '#000' : 'var(--dim)',
+                    border: '1px solid var(--wire)', padding: '8px 20px',
+                    fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
+                    letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  }}>
+                    {f === 'all' ? `All (${inquiries.length})` : `${f} (${byStatus(f)})`}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '2px' }}>
+                {[['list', 'List'], ['company', 'By Company']].map(([m, label]) => (
+                  <button key={m} onClick={() => setListMode(m)} style={{
+                    background: listMode === m ? 'var(--ink4)' : 'transparent',
+                    color: listMode === m ? 'var(--signal)' : 'var(--faint)',
+                    border: `1px solid ${listMode === m ? 'var(--sigborder)' : 'var(--wire)'}`,
+                    padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace",
+                    fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  }}>{label}</button>
+                ))}
+              </div>
             </div>
 
             {loading ? (
@@ -354,9 +441,13 @@ export default function Admin({ onExit }) {
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
                 No inquiries{filter !== 'all' ? ` with status "${filter}"` : ''} yet.
               </div>
-            ) : (
+            ) : listMode === 'list' ? (
               filtered.map(inquiry => (
                 <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} onNotesSaved={handleNotesSaved} />
+              ))
+            ) : (
+              companyGroups.map(group => (
+                <CompanyGroup key={group.name} company={group.name} jobs={group.jobs} password={password} onStatusChange={handleStatusChange} onNotesSaved={handleNotesSaved} emailFlags={emailFlags} />
               ))
             )}
           </>
