@@ -210,6 +210,41 @@ const inputStyle = {
   outline: 'none', width: '100%',
 }
 
+function SearchBar({ search, onSearch, dateFrom, onDateFrom, dateTo, onDateTo, placeholder, count, total }) {
+  const hasFilter = search || dateFrom || dateTo
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={search}
+          onChange={e => onSearch(e.target.value)}
+          placeholder={placeholder || 'Search…'}
+          style={{ flex: 1, background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)', padding: '8px 12px', fontFamily: "'DM Sans',sans-serif", fontSize: '13px', outline: 'none', minWidth: 0 }}
+          onFocus={e => e.target.style.borderColor = 'var(--signal)'}
+          onBlur={e => e.target.style.borderColor = 'var(--wire)'}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: 'var(--faint)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>From</span>
+          <input type="date" value={dateFrom} onChange={e => onDateFrom(e.target.value)} style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', color: dateFrom ? 'var(--text)' : 'var(--faint)', padding: '8px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px', outline: 'none', width: '148px' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: 'var(--faint)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>To</span>
+          <input type="date" value={dateTo} onChange={e => onDateTo(e.target.value)} style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', color: dateTo ? 'var(--text)' : 'var(--faint)', padding: '8px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px', outline: 'none', width: '148px' }} />
+        </div>
+        {hasFilter && (
+          <button onClick={() => { onSearch(''); onDateFrom(''); onDateTo('') }} style={{ background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--faint)', padding: '8px 12px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0 }}>✕ Clear</button>
+        )}
+      </div>
+      {hasFilter && count !== undefined && (
+        <div style={{ marginTop: '6px', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: count === total ? 'var(--faint)' : 'var(--signal)', letterSpacing: '0.06em' }}>
+          {count === total ? `${total} result${total !== 1 ? 's' : ''}` : `${count} of ${total} match${count !== 1 ? 'es' : ''}`}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Row({ k, v }) {
   return (
     <div style={{ display: 'flex', gap: '10px', marginBottom: '6px', fontSize: '12px' }}>
@@ -770,6 +805,12 @@ export default function Admin({ onExit }) {
   const [invoiceRecords, setInvoiceRecords]   = useState([])
   const [invoiceFilter, setInvoiceFilter]     = useState('pending')
   const [invoiceListMode, setInvoiceListMode] = useState('list')
+  const [inquirySearch, setInquirySearch]     = useState('')
+  const [inquiryDateFrom, setInquiryDateFrom] = useState('')
+  const [inquiryDateTo, setInquiryDateTo]     = useState('')
+  const [invoiceSearch, setInvoiceSearch]     = useState('')
+  const [invoiceDateFrom, setInvoiceDateFrom] = useState('')
+  const [invoiceDateTo, setInvoiceDateTo]     = useState('')
 
   const load = useCallback(async (pass) => {
     setLoading(true)
@@ -828,12 +869,28 @@ export default function Admin({ onExit }) {
 
   const filtered = filter === 'all' ? inquiries : inquiries.filter(i => (i.status || 'new') === filter)
 
+  const inquirySearched = filtered.filter(inq => {
+    const s = inquirySearch.toLowerCase()
+    const matchText = !inquirySearch ||
+      inq.ref_num?.toLowerCase().includes(s) ||
+      inq.company?.toLowerCase().includes(s) ||
+      `${inq.first_name} ${inq.last_name}`.toLowerCase().includes(s) ||
+      inq.email?.toLowerCase().includes(s) ||
+      inq.phone?.toLowerCase().includes(s) ||
+      inq.industry?.toLowerCase().includes(s) ||
+      inq.location?.toLowerCase().includes(s)
+    const d = new Date(inq.created_at)
+    const matchFrom = !inquiryDateFrom || d >= new Date(inquiryDateFrom)
+    const matchTo   = !inquiryDateTo   || d <= new Date(inquiryDateTo + 'T23:59:59')
+    return matchText && matchFrom && matchTo
+  })
+
   const byStatus = (s) => inquiries.filter(i => (i.status || 'new') === s).length
 
-  // Build company groups from filtered inquiries
+  // Build company groups from searched inquiries
   const companyGroups = (() => {
     const map = {}
-    filtered.forEach(inq => {
+    inquirySearched.forEach(inq => {
       const key = (inq.company || 'Unknown').toLowerCase().trim()
       if (!map[key]) map[key] = { name: inq.company || 'Unknown', jobs: [] }
       map[key].jobs.push(inq)
@@ -930,6 +987,14 @@ export default function Admin({ onExit }) {
               </div>
             )}
 
+            <SearchBar
+              search={inquirySearch} onSearch={setInquirySearch}
+              dateFrom={inquiryDateFrom} onDateFrom={setInquiryDateFrom}
+              dateTo={inquiryDateTo} onDateTo={setInquiryDateTo}
+              placeholder="Search ref #, company, name, email, location…"
+              count={inquirySearched.length} total={filtered.length}
+            />
+
             {/* Filter + mode row */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ display: 'flex', gap: '2px' }}>
@@ -960,12 +1025,12 @@ export default function Admin({ onExit }) {
 
             {loading ? (
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--dim)', padding: '40px 0', textAlign: 'center' }}>Loading...</div>
-            ) : filtered.length === 0 ? (
+            ) : inquirySearched.length === 0 ? (
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
-                No inquiries{filter !== 'all' ? ` with status "${filter}"` : ''} yet.
+                {inquirySearch || inquiryDateFrom || inquiryDateTo ? 'No results match your search.' : `No inquiries${filter !== 'all' ? ` with status "${filter}"` : ''} yet.`}
               </div>
             ) : listMode === 'list' ? (
-              filtered.map(inquiry => (
+              inquirySearched.map(inquiry => (
                 <InquiryCard key={inquiry.id} inquiry={inquiry} password={password} onStatusChange={handleStatusChange} onNotesSaved={handleNotesSaved} />
               ))
             ) : (
@@ -992,6 +1057,31 @@ export default function Admin({ onExit }) {
           const filtered = invoiceRecords.filter(r => categorize(r) === invoiceFilter)
           const countOf = (k) => invoiceRecords.filter(r => categorize(r) === k).length
 
+          const invoiceSearched = filtered.filter(r => {
+            const s = invoiceSearch.toLowerCase()
+            const matchText = !invoiceSearch ||
+              r.job_id?.toLowerCase().includes(s) ||
+              r.job_number?.toLowerCase().includes(s) ||
+              r.ref_num?.toLowerCase().includes(s) ||
+              r.company?.toLowerCase().includes(s) ||
+              `${r.first_name} ${r.last_name}`.toLowerCase().includes(s)
+            const d = r.invoice_date ? new Date(r.invoice_date) : new Date(r.created_at)
+            const matchFrom = !invoiceDateFrom || d >= new Date(invoiceDateFrom)
+            const matchTo   = !invoiceDateTo   || d <= new Date(invoiceDateTo + 'T23:59:59')
+            return matchText && matchFrom && matchTo
+          })
+
+          // Build company groups from searched invoices
+          const invoiceGroups = (() => {
+            const map = {}
+            invoiceSearched.forEach(r => {
+              const key = (r.company || 'Unknown').toLowerCase().trim()
+              if (!map[key]) map[key] = { name: r.company || 'Unknown', rows: [] }
+              map[key].rows.push(r)
+            })
+            return Object.values(map)
+          })()
+
           const invoiceHeader = (
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
               <span>Company / Contact</span><span>Job</span><span>Day Rate</span>
@@ -1013,20 +1103,9 @@ export default function Admin({ onExit }) {
             )
           }
 
-          // Build company groups for the company view
-          const invoiceGroups = (() => {
-            const map = {}
-            filtered.forEach(r => {
-              const key = (r.company || 'Unknown').toLowerCase().trim()
-              if (!map[key]) map[key] = { name: r.company || 'Unknown', rows: [] }
-              map[key].rows.push(r)
-            })
-            return Object.values(map)
-          })()
-
           return (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', gap: '2px' }}>
                   {INVOICE_TABS.map(({ key, label, color }) => (
                     <button key={key} onClick={() => setInvoiceFilter(key)} style={{
@@ -1051,17 +1130,25 @@ export default function Admin({ onExit }) {
                 </div>
               </div>
 
-              {filtered.length === 0 ? (
+              <SearchBar
+                search={invoiceSearch} onSearch={setInvoiceSearch}
+                dateFrom={invoiceDateFrom} onDateFrom={setInvoiceDateFrom}
+                dateTo={invoiceDateTo} onDateTo={setInvoiceDateTo}
+                placeholder="Search job ID, job #, ref #, company, name…"
+                count={invoiceSearched.length} total={filtered.length}
+              />
+
+              {invoiceSearched.length === 0 ? (
                 <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
-                  No records in this category.
+                  {invoiceSearch || invoiceDateFrom || invoiceDateTo ? 'No results match your search.' : 'No records in this category.'}
                 </div>
               ) : invoiceListMode === 'list' ? (
                 <div>
                   {invoiceHeader}
-                  {filtered.map((r, i) => (
+                  {invoiceSearched.map((r, i) => (
                     <InvoiceRow key={r.inv_id || i} record={r} password={password} onSaved={handleInvoiceSaved} />
                   ))}
-                  {totalsRow(filtered)}
+                  {totalsRow(invoiceSearched)}
                 </div>
               ) : (
                 <div>
