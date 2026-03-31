@@ -305,7 +305,7 @@ app.get('/api/admin/invoices', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT
         i.id, i.status, i.ref_num, i.first_name, i.last_name, i.company,
-        i.industry, i.location, i.start_date, i.created_at,
+        i.industry, i.location, i.created_at,
         inv.id          AS inv_id,
         inv.job_id,
         inv.job_number,
@@ -533,7 +533,7 @@ app.post('/api/admin/invoices/:id/send-invoice', requireAdmin, async (req, res) 
   try {
     const row = await fetchInvoiceWithInquiry(req.params.id);
     if (!row) return res.status(404).json({ error: 'Invoice not found' });
-    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location, start_date: row.start_date };
+    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location };
     const inv = row;
     const toEmail = req.body.toEmail || row.email;
     await mailer.sendEmail({
@@ -555,7 +555,7 @@ app.post('/api/admin/invoices/:id/send-receipt', requireAdmin, async (req, res) 
     const row = await fetchInvoiceWithInquiry(req.params.id);
     if (!row) return res.status(404).json({ error: 'Invoice not found' });
     if (!row.paid) return res.status(400).json({ error: 'Invoice is not marked as paid' });
-    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location, start_date: row.start_date };
+    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location };
     const inv = row;
     const toEmail = req.body.toEmail || row.email;
     await mailer.sendEmail({
