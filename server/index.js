@@ -335,7 +335,7 @@ app.get('/api/admin/invoices', requireAdmin, async (req, res) => {
         inv.paid_date,
         inv.notes       AS inv_notes
       FROM inquiries i
-      LEFT JOIN invoices inv ON inv.inquiry_id = i.id
+      INNER JOIN invoices inv ON inv.inquiry_id = i.id
       ORDER BY i.created_at DESC
     `);
     res.json(rows);
