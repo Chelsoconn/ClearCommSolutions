@@ -355,7 +355,7 @@ app.get('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
   try {
-    const { refNum, jobNumber, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { refNum, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
     const jobId = 'JB-' + Math.random().toString(36).toUpperCase().slice(2, 8);
     const { rows } = await pool.query(
       `INSERT INTO invoices (inquiry_id, ref_num, job_id, invoice_date, due_date, daily_rate, total_days, cost, promo, promo_amount, paid, paid_date, notes)
@@ -364,9 +364,9 @@ app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
        dailyRate || null, totalDays || null, cost || null,
        promo || null, promoAmount || null, paid === true, paidDate || null, notes || null]
     );
-    const jobNumber = 'JOB-' + String(rows[0].id).padStart(4, '0');
-    await pool.query('UPDATE invoices SET job_number=$1 WHERE id=$2', [jobNumber, rows[0].id]);
-    rows[0].job_number = jobNumber;
+    const generatedJobNumber = 'JOB-' + String(rows[0].id).padStart(4, '0');
+    await pool.query('UPDATE invoices SET job_number=$1 WHERE id=$2', [generatedJobNumber, rows[0].id]);
+    rows[0].job_number = generatedJobNumber;
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Failed to create invoice' });
