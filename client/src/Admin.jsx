@@ -390,8 +390,20 @@ function InvoicePanel({ inquiry, password }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            {field('paid', 'checkbox')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer' }} onClick={() => setForm(p => ({ ...p, paid: !p.paid }))}>
+            <div style={{
+              width: '18px', height: '18px', flexShrink: 0,
+              background: form.paid ? '#00C07F' : 'var(--ink3)',
+              border: `1px solid ${form.paid ? '#00C07F' : 'var(--wire)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.15s, border-color 0.15s',
+            }}>
+              {form.paid && (
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                  <polyline points="1 4 4 7 9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: form.paid ? '#00C07F' : 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Mark as Paid
             </span>
