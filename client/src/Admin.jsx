@@ -218,7 +218,7 @@ function InvoicePanel({ inquiry, password }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [form, setForm]       = useState({
-    jobNumber: '', invoiceDate: '', dueDate: '',
+    invoiceDate: '', dueDate: '',
     dailyRate: '', totalDays: '',
     promo: '', promoAmount: '', paid: false, paidDate: '', notes: '',
   })
@@ -229,7 +229,6 @@ function InvoicePanel({ inquiry, password }) {
     }).then(r => r.json()).then(data => {
       setInvoice(data)
       if (data) setForm({
-        jobNumber:   data.job_number   || '',
         invoiceDate: data.invoice_date ? data.invoice_date.slice(0, 10) : '',
         dueDate:     data.due_date     ? data.due_date.slice(0, 10) : '',
         dailyRate:   data.daily_rate   || '',
@@ -251,7 +250,6 @@ function InvoicePanel({ inquiry, password }) {
     setSaving(true)
     const body = {
       refNum:      inquiry.ref_num,
-      jobNumber:   form.jobNumber   || null,
       invoiceDate: form.invoiceDate || null,
       dueDate:     form.dueDate     || null,
       dailyRate:   form.dailyRate   ? parseFloat(form.dailyRate)   : null,
@@ -321,6 +319,7 @@ function InvoicePanel({ inquiry, password }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
           <div>
             <Row k="Job #"    v={invoice.job_number || '—'} />
+            <Row k="Job ID"   v={invoice.job_id || '—'} />
             <Row k="Ref"      v={invoice.ref_num} />
             <Row k="Invoice"  v={invoice.invoice_date ? invoice.invoice_date.slice(0,10) : '—'} />
             <Row k="Due"      v={invoice.due_date ? invoice.due_date.slice(0,10) : '—'} />
@@ -351,10 +350,6 @@ function InvoicePanel({ inquiry, password }) {
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             <div>
-              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Job #</div>
-              {field('jobNumber', 'text', 'e.g. 001')}
-            </div>
-            <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Invoice Date</div>
               {field('invoiceDate', 'date')}
             </div>
@@ -362,6 +357,7 @@ function InvoicePanel({ inquiry, password }) {
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Due Date</div>
               {field('dueDate', 'date')}
             </div>
+            <div />
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Daily Rate ($)</div>
               {field('dailyRate', 'number', '0.00')}

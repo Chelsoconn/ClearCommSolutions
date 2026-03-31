@@ -358,12 +358,15 @@ app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
     const { refNum, jobNumber, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
     const jobId = 'JB-' + Math.random().toString(36).toUpperCase().slice(2, 8);
     const { rows } = await pool.query(
-      `INSERT INTO invoices (inquiry_id, ref_num, job_id, job_number, invoice_date, due_date, daily_rate, total_days, cost, promo, promo_amount, paid, paid_date, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [req.params.id, refNum, jobId, jobNumber || null, invoiceDate || null, dueDate || null,
+      `INSERT INTO invoices (inquiry_id, ref_num, job_id, invoice_date, due_date, daily_rate, total_days, cost, promo, promo_amount, paid, paid_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.params.id, refNum, jobId, invoiceDate || null, dueDate || null,
        dailyRate || null, totalDays || null, cost || null,
        promo || null, promoAmount || null, paid === true, paidDate || null, notes || null]
     );
+    const jobNumber = 'JOB-' + String(rows[0].id).padStart(4, '0');
+    await pool.query('UPDATE invoices SET job_number=$1 WHERE id=$2', [jobNumber, rows[0].id]);
+    rows[0].job_number = jobNumber;
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Failed to create invoice' });
@@ -372,11 +375,11 @@ app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/invoices/:id', requireAdmin, async (req, res) => {
   try {
-    const { jobNumber, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE invoices SET job_number=$1, invoice_date=$2, due_date=$3, daily_rate=$4, total_days=$5,
-       cost=$6, promo=$7, promo_amount=$8, paid=$9, paid_date=$10, notes=$11 WHERE id=$12 RETURNING *`,
-      [jobNumber || null, invoiceDate || null, dueDate || null, dailyRate || null, totalDays || null,
+      `UPDATE invoices SET invoice_date=$1, due_date=$2, daily_rate=$3, total_days=$4,
+       cost=$5, promo=$6, promo_amount=$7, paid=$8, paid_date=$9, notes=$10 WHERE id=$11 RETURNING *`,
+      [invoiceDate || null, dueDate || null, dailyRate || null, totalDays || null,
        cost || null, promo || null, promoAmount || null, paid === true, paidDate || null, notes || null, req.params.id]
     );
     res.json(rows[0]);
