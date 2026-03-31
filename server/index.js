@@ -36,15 +36,8 @@ async function initDb() {
       email       TEXT,
       phone       TEXT,
       company     TEXT,
-      job_title   TEXT,
       industry    TEXT,
       location    TEXT,
-      start_date  TEXT,
-      duration    TEXT,
-      qty         TEXT,
-      hazards     TEXT[],
-      crew_types  TEXT[],
-      infra       TEXT[],
       notes       TEXT,
       status      TEXT DEFAULT 'new',
       admin_notes TEXT,
@@ -52,6 +45,13 @@ async function initDb() {
     );
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS job_title;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS start_date;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS duration;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS qty;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS hazards;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS crew_types;
+    ALTER TABLE inquiries DROP COLUMN IF EXISTS infra;
 
     CREATE TABLE IF NOT EXISTS invoices (
       id            SERIAL PRIMARY KEY,
@@ -103,19 +103,10 @@ CONTACT
   Email:    ${d.email}
   Phone:    ${d.phone}
   Company:  ${d.company}
-  Title:    ${d.jobTitle || '—'}
 
-PROJECT
-  Industry:   ${d.industry}
-  Location:   ${d.location}
-  Start Date: ${d.startDate}
-  Duration:   ${d.duration}
-
-REQUIREMENTS
-  Device Count:  ${d.qty}
-  Hazard Class:  ${d.hazards?.length ? d.hazards.join(', ') : 'None selected'}
-  Crew Types:    ${d.crewTypes?.length ? d.crewTypes.join(', ') : 'None selected'}
-  Infrastructure:${d.infra?.length ? d.infra.join(', ') : 'None selected'}
+SITE
+  Industry: ${d.industry}
+  Location: ${d.location}
 
 NOTES
   ${d.notes || 'None'}
@@ -146,11 +137,9 @@ Your reference number is: ${d.refNum}
 
 Here's a summary of what you submitted:
 
-  Company:    ${d.company}
-  Location:   ${d.location}
-  Start Date: ${d.startDate}
-  Duration:   ${d.duration}
-  Devices:    ${d.qty}
+  Company:  ${d.company}
+  Industry: ${d.industry}
+  Location: ${d.location}
 
 If you have any questions in the meantime, just reply to this email.
 
@@ -187,22 +176,18 @@ app.post('/api/visit', async (req, res) => {
 app.post('/api/inquiry', async (req, res) => {
   try {
     const {
-      refNum, firstName, lastName, email, phone, company, jobTitle,
-      industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes
+      refNum, firstName, lastName, email, phone, company,
+      industry, location, notes
     } = req.body;
 
     await pool.query(
       `INSERT INTO inquiries
-        (ref_num, first_name, last_name, email, phone, company, job_title,
-         industry, location, start_date, duration, qty, hazards, crew_types, infra, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [refNum, firstName, lastName, email, phone, company, jobTitle,
-       industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes]
+        (ref_num, first_name, last_name, email, phone, company, industry, location, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [refNum, firstName, lastName, email, phone, company, industry, location, notes]
     );
 
-    // Fire notifications in parallel — don't block the response
-    const notifData = { refNum, firstName, lastName, email, phone, company, jobTitle,
-      industry, location, startDate, duration, qty, hazards, crewTypes, infra, notes };
+    const notifData = { refNum, firstName, lastName, email, phone, company, industry, location, notes };
 
     sendEmailNotification(notifData).catch(err => console.error('Email error:', err.message));
     sendConfirmationEmail(notifData).catch(err => console.error('Confirmation email error:', err.message));
@@ -456,8 +441,7 @@ function buildInvoiceHtml({ inq, inv, isReceipt }) {
       <td width="50%" valign="top" align="right">
         <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;margin-bottom:10px;">Project</div>
         <div style="font-size:13px;color:#444;margin-bottom:3px;">${inq.industry}</div>
-        <div style="font-size:13px;color:#444;margin-bottom:3px;">${inq.location}</div>
-        ${inq.start_date ? `<div style="font-size:13px;color:#777;">Start: ${inq.start_date}</div>` : ''}
+        <div style="font-size:13px;color:#444;">${inq.location}</div>
       </td>
     </tr></table>
   </td></tr>
@@ -534,7 +518,7 @@ function buildInvoiceHtml({ inq, inv, isReceipt }) {
 async function fetchInvoiceWithInquiry(invoiceId) {
   const { rows } = await pool.query(`
     SELECT
-      i.first_name, i.last_name, i.email, i.company, i.industry, i.location, i.start_date,
+      i.first_name, i.last_name, i.email, i.company, i.industry, i.location,
       inv.id, inv.ref_num, inv.job_id, inv.job_number, inv.invoice_date, inv.due_date,
       inv.daily_rate, inv.total_days, inv.cost, inv.promo, inv.promo_amount,
       inv.paid, inv.paid_date, inv.notes

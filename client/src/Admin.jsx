@@ -100,24 +100,17 @@ function InquiryCard({ inquiry, password, onStatusChange, onNotesSaved }) {
       {/* Expanded detail */}
       {open && (
         <div style={{ borderTop: '1px solid var(--wire)', padding: '24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
             <div>
               <div style={sectionLabel}>Contact</div>
-              <Row k="Email"   v={d.email} />
-              <Row k="Phone"   v={d.phone} />
-              <Row k="Title"   v={d.job_title || '—'} />
+              <Row k="Email"    v={d.email} />
+              <Row k="Phone"    v={d.phone} />
+              <Row k="Company"  v={d.company} />
             </div>
             <div>
-              <div style={sectionLabel}>Project</div>
-              <Row k="Start"    v={d.start_date} />
-              <Row k="Duration" v={d.duration} />
-              <Row k="Devices"  v={d.qty} />
-            </div>
-            <div>
-              <div style={sectionLabel}>Requirements</div>
-              <Row k="Hazards"  v={d.hazards?.join(', ') || '—'} />
-              <Row k="Crews"    v={d.crew_types?.join(', ') || '—'} />
-              <Row k="Infra"    v={d.infra?.join(', ') || '—'} />
+              <div style={sectionLabel}>Site</div>
+              <Row k="Industry" v={d.industry} />
+              <Row k="Location" v={d.location} />
             </div>
           </div>
 

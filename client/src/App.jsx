@@ -1,49 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Admin from './Admin.jsx'
 
-function CheckOpt({ label, checked, onToggle }) {
-  return (
-    <div className={`check-opt${checked ? ' on' : ''}`} onClick={onToggle}>
-      <div className="cbox">
-        {checked && (
-          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-            <polyline points="1 4 4 7 9 1" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </div>
-      <span className="clbl">{label}</span>
-    </div>
-  )
-}
-
-const HAZARD_OPTS = [
-  'ATEX Zone 1 — Continuous risk',
-  'ATEX Zone 2 — Occasional risk',
-  'NEC Class I Division 1',
-  'NEC Class I Division 2',
-  'Non-classified / General Industry',
-  'Not sure — need assessment',
-]
-
-const CREW_OPTS = [
-  'Trade / Labour Crews',
-  'Supervisors / Foremen',
-  'Crane / Rigging Operations',
-  'Safety / EHS Officers',
-  'Vehicle / Equipment Operators',
-  'Security Personnel',
-  'Confined Space Entry Teams',
-  'Management / Executive',
-]
-
-const INFRA_OPTS = [
-  'Repeater / Range Extension',
-  'Vehicle Mount Radios',
-  'Command Post / Base Station',
-  'Earpieces / Remote Speaker Mics',
-]
-
-const QTY_OPTS = ['1–10', '11–25', '26–50', '51–100', '101–250', '250+']
 
 const CHANNELS = [
   {
@@ -137,19 +94,14 @@ const PROCESS_STEPS = [
 export default function App() {
   const [page, setPage] = useState('home')
   const [openCh, setOpenCh] = useState(null)
-  const [selQty, setSelQty] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [refNum, setRefNum] = useState('')
   const [form, setForm] = useState({
-    fname: '', lname: '', email: '', phone: '', company: '',
-    jobtitle: '', industry: '', location: '', startdate: '', duration: '', notes: ''
+    fname: '', lname: '', email: '', phone: '', company: '', industry: '', location: '', notes: ''
   })
   const [errors, setErrors] = useState({})
-  const [hazards, setHazards] = useState(new Set())
-  const [crewTypes, setCrewTypes] = useState(new Set())
-  const [infra, setInfra] = useState(new Set())
 
   const waveRefs = useRef({})
   const lastWaveRef = useRef(-1)
@@ -229,22 +181,12 @@ export default function App() {
     if (errors[field]) setErrors(e => ({ ...e, [field]: false }))
   }
 
-  const toggleSet = (setFn, val) => {
-    setFn(s => {
-      const next = new Set(s)
-      if (next.has(val)) next.delete(val)
-      else next.add(val)
-      return next
-    })
-  }
-
   const validate = () => {
     const errs = {}
-    ;['fname', 'lname', 'email', 'phone', 'company', 'industry', 'location', 'startdate', 'duration'].forEach(f => {
+    ;['fname', 'lname', 'email', 'phone', 'company', 'industry', 'location'].forEach(f => {
       if (!form[f]?.trim()) errs[f] = true
     })
     if (form.email && !/\S+@\S+\.\S+/.test(form.email)) errs.email = true
-    if (!selQty) errs.qty = true
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -265,26 +207,15 @@ export default function App() {
           email: form.email,
           phone: form.phone,
           company: form.company,
-          jobTitle: form.jobtitle,
           industry: form.industry,
           location: form.location,
-          startDate: form.startdate,
-          duration: form.duration,
-          qty: selQty,
-          hazards: [...hazards],
-          crewTypes: [...crewTypes],
-          infra: [...infra],
           notes: form.notes,
         }),
       })
       if (!res.ok) throw new Error('Server error')
       setRefNum(ref)
       setShowSuccess(true)
-      setForm({ fname: '', lname: '', email: '', phone: '', company: '', jobtitle: '', industry: '', location: '', startdate: '', duration: '', notes: '' })
-      setSelQty('')
-      setHazards(new Set())
-      setCrewTypes(new Set())
-      setInfra(new Set())
+      setForm({ fname: '', lname: '', email: '', phone: '', company: '', industry: '', location: '', notes: '' })
       setErrors({})
     } catch {
       setSubmitError(true)
@@ -666,7 +597,7 @@ export default function App() {
                 <span>Deployment Quote</span>
               </div>
               <h1 className="ph-title">Let's Talk<br />About Your Site</h1>
-              <p className="ph-sub">No rate cards, no standard packages. We scope every deployment based on your site, your crews, and what the work actually requires. Fill this out and someone from our team will call you within 4 hours — not to sell you, to understand what you need.</p>
+              <p className="ph-sub">No rate cards, no standard packages. We scope every deployment based on your site, your crews, and what the work actually requires. Fill this out and someone from our team will call you within 4 hours</p>
             </div>
             <div className="trust-list">
               {['No off-the-shelf pricing', 'Response within 4 hours', 'OSHA cert docs included', 'Dedicated deployment specialist', 'No commitment to quote'].map(t => (
@@ -681,7 +612,7 @@ export default function App() {
 
         <div className="form-outer">
           <div>
-            {/* Section 1 */}
+            {/* Section 1 — Contact */}
             <div className="form-card">
               <div className="fc-head"><div className="fc-badge">1</div><div className="fc-title">Your Contact Information</div></div>
               <div className="fb">
@@ -709,23 +640,17 @@ export default function App() {
                     {errors.phone && <div className="ferr show">Required</div>}
                   </div>
                 </div>
-                <div className="frow">
-                  <div className="fg">
-                    <label htmlFor="company">Company <span className="req">*</span></label>
-                    <input id="company" type="text" placeholder="Acme Construction Ltd." value={form.company} onChange={e => updateForm('company', e.target.value)} className={errors.company ? 'err' : ''} />
-                    {errors.company && <div className="ferr show">Required</div>}
-                  </div>
-                  <div className="fg">
-                    <label htmlFor="jobtitle">Your Role / Title</label>
-                    <input id="jobtitle" type="text" placeholder="Site Superintendent" value={form.jobtitle} onChange={e => updateForm('jobtitle', e.target.value)} />
-                  </div>
+                <div className="fg">
+                  <label htmlFor="company">Company <span className="req">*</span></label>
+                  <input id="company" type="text" placeholder="Acme Construction Ltd." value={form.company} onChange={e => updateForm('company', e.target.value)} className={errors.company ? 'err' : ''} />
+                  {errors.company && <div className="ferr show">Required</div>}
                 </div>
               </div>
             </div>
 
-            {/* Section 2 */}
+            {/* Section 2 — Site */}
             <div className="form-card">
-              <div className="fc-head"><div className="fc-badge">2</div><div className="fc-title">Project &amp; Site Details</div></div>
+              <div className="fc-head"><div className="fc-badge">2</div><div className="fc-title">Site Details</div></div>
               <div className="fb">
                 <div className="frow">
                   <div className="fg">
@@ -750,80 +675,21 @@ export default function App() {
                     {errors.location && <div className="ferr show">Required</div>}
                   </div>
                 </div>
-                <div className="frow">
-                  <div className="fg">
-                    <label htmlFor="startdate">Deployment Start Date <span className="req">*</span></label>
-                    <input id="startdate" type="date" value={form.startdate} onChange={e => updateForm('startdate', e.target.value)} className={errors.startdate ? 'err' : ''} />
-                    {errors.startdate && <div className="ferr show">Required</div>}
-                  </div>
-                  <div className="fg">
-                    <label htmlFor="duration">Estimated Duration <span className="req">*</span></label>
-                    <select id="duration" value={form.duration} onChange={e => updateForm('duration', e.target.value)} className={errors.duration ? 'err' : ''}>
-                      <option value="">Select duration...</option>
-                      <option>Days (1–7 days)</option>
-                      <option>Weeks (1–4 weeks)</option>
-                      <option>Months (1–3 months)</option>
-                      <option>Extended (3–12 months)</option>
-                      <option>Ongoing / Long-term</option>
-                    </select>
-                    {errors.duration && <div className="ferr show">Required</div>}
-                  </div>
-                </div>
                 <div className="fg">
-                  <label>Hazardous Area Classification (select all that apply)</label>
-                  <div className="check-grid">
-                    {HAZARD_OPTS.map(opt => (
-                      <CheckOpt key={opt} label={opt} checked={hazards.has(opt)} onToggle={() => toggleSet(setHazards, opt)} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 3 */}
-            <div className="form-card">
-              <div className="fc-head"><div className="fc-badge">3</div><div className="fc-title">Communication Requirements</div></div>
-              <div className="fb">
-                <div className="fg">
-                  <label>Approximate Number of Users / Devices <span className="req">*</span></label>
-                  <div className="qty-wrap">
-                    {QTY_OPTS.map(q => (
-                      <div key={q} className={`qty-chip${selQty === q ? ' on' : ''}`} onClick={() => { setSelQty(q); setErrors(e => ({ ...e, qty: false })) }}>{q}</div>
-                    ))}
-                  </div>
-                  {errors.qty && <div className="ferr show">Please select a device count range</div>}
-                </div>
-                <div className="fg">
-                  <label>Crew / Role Types on Site (select all that apply)</label>
-                  <div className="check-grid">
-                    {CREW_OPTS.map(opt => (
-                      <CheckOpt key={opt} label={opt} checked={crewTypes.has(opt)} onToggle={() => toggleSet(setCrewTypes, opt)} />
-                    ))}
-                  </div>
-                </div>
-                <div className="fg">
-                  <label>Infrastructure Needs (select all that apply)</label>
-                  <div className="check-grid">
-                    {INFRA_OPTS.map(opt => (
-                      <CheckOpt key={opt} label={opt} checked={infra.has(opt)} onToggle={() => toggleSet(setInfra, opt)} />
-                    ))}
-                  </div>
-                </div>
-                <div className="fg frow full">
-                  <label>Tell us about your site — crews, scope, challenges, OSHA concerns</label>
-                  <textarea placeholder="Describe your operation: what crews are on site, any known hazardous areas, current communication issues, OSHA requirements you need to meet, or anything else we should know before designing your system..." value={form.notes} onChange={e => updateForm('notes', e.target.value)}></textarea>
+                  <label htmlFor="notes">Anything we should know? <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional)</span></label>
+                  <textarea id="notes" placeholder="Project scope, timing, special requirements..." value={form.notes} onChange={e => updateForm('notes', e.target.value)}></textarea>
                 </div>
                 <div className="submit-wrap">
                   <button className="btn-submit" onClick={submitForm} disabled={submitting}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-                    {submitting ? 'Submitting...' : 'Submit Deployment Quote Request'}
+                    {submitting ? 'Submitting...' : 'Request a Quote'}
                   </button>
                   {submitError && (
                     <div className="ferr show" style={{ textAlign: 'center', marginBottom: '10px' }}>
-                      Something went wrong. Please try again or call 1-800-CLR-COMM.
+                      Something went wrong. Please try again or email deploy@clearcommsolutions.com.
                     </div>
                   )}
-                  <div className="submit-note">A ClearComm deployment specialist will respond within 4 business hours. Your information is never shared or sold. No commitment required.</div>
+                  <div className="submit-note">A ClearComm specialist will be in touch shortly. Your information is never shared or sold.</div>
                 </div>
               </div>
             </div>
