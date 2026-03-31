@@ -220,10 +220,14 @@ function Row({ k, v }) {
 }
 
 function InvoicePanel({ inquiry, password }) {
-  const [invoice, setInvoice] = useState(undefined)
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving]   = useState(false)
-  const [form, setForm]       = useState({
+  const [invoice, setInvoice]         = useState(undefined)
+  const [editing, setEditing]         = useState(false)
+  const [saving, setSaving]           = useState(false)
+  const [sending, setSending]         = useState(null)   // 'invoice'|'alt'|'receipt'
+  const [sentMsg, setSentMsg]         = useState(null)
+  const [showAltEmail, setShowAltEmail] = useState(false)
+  const [altEmail, setAltEmail]       = useState('')
+  const [form, setForm]               = useState({
     invoiceDate: '', dueDate: '',
     dailyRate: '', totalDays: '',
     promo: '', promoAmount: '', paid: false, paidDate: '', notes: '',
@@ -280,6 +284,29 @@ function InvoicePanel({ inquiry, password }) {
     setInvoice(updated)
     setSaving(false)
     setEditing(false)
+  }
+
+  const sendEmail = async (type, toEmail) => {
+    setSending(type)
+    const url = type === 'receipt'
+      ? `/api/admin/invoices/${invoice.id}/send-receipt`
+      : `/api/admin/invoices/${invoice.id}/send-invoice`
+    const body = toEmail ? { toEmail } : {}
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify(body),
+    })
+    const data = await r.json()
+    setSending(null)
+    if (r.ok) {
+      setSentMsg(`Sent to ${data.sentTo}`)
+      if (type === 'alt') { setShowAltEmail(false); setAltEmail('') }
+      setTimeout(() => setSentMsg(null), 5000)
+    } else {
+      setSentMsg('Send failed — check server logs')
+      setTimeout(() => setSentMsg(null), 5000)
+    }
   }
 
   const field = (k, type = 'text', placeholder = '') => (
@@ -345,6 +372,53 @@ function InvoicePanel({ inquiry, password }) {
             <Row k="Paid On"  v={invoice.paid_date ? invoice.paid_date.slice(0,10) : '—'} />
             {invoice.notes && <Row k="Notes" v={invoice.notes} />}
           </div>
+        </div>
+      )}
+
+      {!editing && invoice && (
+        <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+          <button
+            onClick={() => sendEmail('invoice')}
+            disabled={!!sending}
+            style={{ background: 'var(--ink4)', border: '1px solid var(--wire2)', color: sending === 'invoice' ? 'var(--signal)' : 'var(--dim)', padding: '7px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}
+          >{sending === 'invoice' ? 'Sending…' : 'Send Invoice'}</button>
+
+          <button
+            onClick={() => setShowAltEmail(v => !v)}
+            disabled={!!sending}
+            style={{ background: showAltEmail ? 'var(--ink3)' : 'transparent', border: '1px solid var(--wire)', color: 'var(--faint)', padding: '7px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}
+          >Send to Different Email</button>
+
+          <button
+            onClick={() => invoice.paid && sendEmail('receipt')}
+            disabled={!invoice.paid || !!sending}
+            title={!invoice.paid ? 'Mark invoice as paid first' : 'Send receipt'}
+            style={{ background: invoice.paid ? 'rgba(0,192,127,0.1)' : 'var(--ink3)', border: `1px solid ${invoice.paid ? 'rgba(0,192,127,0.35)' : 'var(--wire)'}`, color: invoice.paid ? (sending === 'receipt' ? '#00C07F' : '#00C07F') : 'var(--faint)', padding: '7px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: invoice.paid ? 'pointer' : 'not-allowed', opacity: invoice.paid ? 1 : 0.5 }}
+          >{sending === 'receipt' ? 'Sending…' : 'Send Receipt'}</button>
+
+          {showAltEmail && (
+            <div style={{ display: 'flex', gap: '6px', width: '100%', marginTop: '6px', alignItems: 'center' }}>
+              <input
+                type="email"
+                value={altEmail}
+                onChange={e => setAltEmail(e.target.value)}
+                placeholder="Enter email address"
+                style={{ ...inputStyle, flex: 1, maxWidth: '300px' }}
+                onKeyDown={e => e.key === 'Enter' && altEmail && sendEmail('alt', altEmail)}
+              />
+              <button
+                onClick={() => altEmail && sendEmail('alt', altEmail)}
+                disabled={!altEmail || !!sending}
+                style={{ background: 'var(--signal)', color: '#000', border: 'none', padding: '7px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600, cursor: altEmail ? 'pointer' : 'not-allowed' }}
+              >{sending === 'alt' ? 'Sending…' : 'Send'}</button>
+            </div>
+          )}
+
+          {sentMsg && (
+            <div style={{ width: '100%', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: sentMsg.includes('failed') ? 'var(--alert)' : '#00C07F', marginTop: '4px', letterSpacing: '0.06em' }}>
+              {sentMsg.includes('failed') ? '✗' : '✓'} {sentMsg}
+            </div>
+          )}
         </div>
       )}
 

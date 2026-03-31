@@ -388,6 +388,206 @@ app.patch('/api/admin/invoices/:id', requireAdmin, async (req, res) => {
   }
 });
 
+function buildInvoiceHtml({ inq, inv, isReceipt }) {
+  const cost     = parseFloat(inv.cost || 0);
+  const discount = parseFloat(inv.promo_amount || 0);
+  const net      = cost - discount;
+  const fmt      = (d) => d ? String(d).slice(0, 10) : '—';
+  const money    = (n) => n ? '$' + parseFloat(n).toFixed(2) : '—';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${isReceipt ? 'Receipt' : 'Invoice'} — ClearComm Solutions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f0f1;font-family:Helvetica Neue,Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f0f1;padding:40px 20px;">
+<tr><td align="center">
+
+<!-- Card -->
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border:1px solid #d8d8da;">
+
+  <!-- Amber accent bar -->
+  <tr><td height="4" bgcolor="#F0A500" style="background-color:#F0A500;font-size:0;line-height:0;">&nbsp;</td></tr>
+
+  <!-- Dark header -->
+  <tr><td bgcolor="#0E0E0F" style="background-color:#0E0E0F;padding:32px 40px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td valign="bottom">
+        <div style="font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#F0A500;font-family:Courier New,monospace;margin-bottom:10px;">ClearComm Solutions</div>
+        <div style="font-size:40px;font-weight:800;color:#ffffff;letter-spacing:3px;font-family:Helvetica Neue,Helvetica,Arial,sans-serif;line-height:1;">${isReceipt ? 'RECEIPT' : 'INVOICE'}</div>
+      </td>
+      <td align="right" valign="bottom">
+        ${inv.job_id ? `<div style="font-size:20px;font-weight:700;color:#F0A500;font-family:Courier New,monospace;letter-spacing:1px;">${inv.job_id}</div>` : ''}
+        ${inv.job_number ? `<div style="font-size:11px;color:#666;font-family:Courier New,monospace;letter-spacing:2px;margin-top:4px;">${inv.job_number}</div>` : ''}
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Meta bar -->
+  <tr><td bgcolor="#1a1a1c" style="background-color:#1a1a1c;padding:14px 40px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td>
+        <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#555;font-family:Courier New,monospace;margin-bottom:4px;">Ref #</div>
+        <div style="font-size:12px;color:#bbb;font-family:Courier New,monospace;">${inv.ref_num}</div>
+      </td>
+      ${inv.invoice_date ? `<td align="center">
+        <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#555;font-family:Courier New,monospace;margin-bottom:4px;">${isReceipt ? 'Paid On' : 'Invoice Date'}</div>
+        <div style="font-size:12px;color:#bbb;font-family:Courier New,monospace;">${isReceipt && inv.paid_date ? fmt(inv.paid_date) : fmt(inv.invoice_date)}</div>
+      </td>` : ''}
+      ${inv.due_date && !isReceipt ? `<td align="right">
+        <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#555;font-family:Courier New,monospace;margin-bottom:4px;">Due Date</div>
+        <div style="font-size:12px;color:#E84040;font-family:Courier New,monospace;font-weight:700;">${fmt(inv.due_date)}</div>
+      </td>` : ''}
+    </tr></table>
+  </td></tr>
+
+  <!-- Billed To / Project -->
+  <tr><td style="padding:32px 40px 0 40px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td width="50%" valign="top">
+        <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;margin-bottom:10px;">Billed To</div>
+        <div style="font-size:18px;font-weight:700;color:#0E0E0F;margin-bottom:3px;">${inq.first_name} ${inq.last_name}</div>
+        <div style="font-size:14px;color:#444;margin-bottom:3px;">${inq.company}</div>
+        <div style="font-size:13px;color:#777;">${inq.email}</div>
+      </td>
+      <td width="50%" valign="top" align="right">
+        <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;margin-bottom:10px;">Project</div>
+        <div style="font-size:13px;color:#444;margin-bottom:3px;">${inq.industry}</div>
+        <div style="font-size:13px;color:#444;margin-bottom:3px;">${inq.location}</div>
+        ${inq.start_date ? `<div style="font-size:13px;color:#777;">Start: ${inq.start_date}</div>` : ''}
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Line items -->
+  <tr><td style="padding:24px 40px 0 40px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:2px solid #0E0E0F;">
+      <tr>
+        <td style="padding:10px 0;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;border-bottom:1px solid #e5e5e5;">Description</td>
+        <td align="center" style="padding:10px 0;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;border-bottom:1px solid #e5e5e5;white-space:nowrap;">Days</td>
+        <td align="right" style="padding:10px 0;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;border-bottom:1px solid #e5e5e5;white-space:nowrap;">Day Rate</td>
+        <td align="right" style="padding:10px 0;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#aaa;font-family:Courier New,monospace;border-bottom:1px solid #e5e5e5;white-space:nowrap;">Amount</td>
+      </tr>
+      <tr>
+        <td style="padding:18px 0;border-bottom:1px solid #f0f0f0;vertical-align:top;">
+          <div style="font-size:14px;font-weight:700;color:#0E0E0F;margin-bottom:4px;">Push-to-Talk Communication Services</div>
+          <div style="font-size:12px;color:#999;">Radio device rental &amp; field support</div>
+        </td>
+        <td align="center" style="padding:18px 0;border-bottom:1px solid #f0f0f0;vertical-align:top;font-size:14px;color:#444;">${inv.total_days || '—'}</td>
+        <td align="right" style="padding:18px 0;border-bottom:1px solid #f0f0f0;vertical-align:top;font-size:14px;color:#444;">${money(inv.daily_rate)}</td>
+        <td align="right" style="padding:18px 0;border-bottom:1px solid #f0f0f0;vertical-align:top;font-size:15px;font-weight:700;color:#0E0E0F;">${money(inv.cost)}</td>
+      </tr>
+      ${discount > 0 ? `<tr>
+        <td colspan="3" align="right" style="padding:12px 8px 12px 0;font-size:13px;color:#666;border-bottom:1px solid #f0f0f0;">Discount${inv.promo ? ` — ${inv.promo}` : ''}</td>
+        <td align="right" style="padding:12px 0;font-size:13px;color:#E84040;font-weight:600;border-bottom:1px solid #f0f0f0;">&#8722;$${discount.toFixed(2)}</td>
+      </tr>` : ''}
+    </table>
+  </td></tr>
+
+  <!-- Total box -->
+  <tr><td style="padding:0 40px 32px 40px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td>&nbsp;</td>
+        <td width="220" bgcolor="#0E0E0F" style="background-color:#0E0E0F;padding:20px 24px;" align="right">
+          <div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#777;font-family:Courier New,monospace;margin-bottom:8px;">${isReceipt ? 'Total Paid' : 'Total Due'}</div>
+          <div style="font-size:30px;font-weight:800;color:#F0A500;font-family:Helvetica Neue,Helvetica,Arial,sans-serif;line-height:1;">$${net.toFixed(2)}</div>
+          ${isReceipt ? '<div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#00C07F;margin-top:10px;font-family:Courier New,monospace;">&#10003; PAID IN FULL</div>' : ''}
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  ${inv.notes ? `<!-- Notes -->
+  <tr><td style="padding:0 40px 32px 40px;">
+    <div style="background:#fafafa;border-left:3px solid #F0A500;padding:14px 18px;font-size:13px;color:#555;line-height:1.7;">${inv.notes}</div>
+  </td></tr>` : ''}
+
+  <!-- Message -->
+  <tr><td style="padding:0 40px 32px 40px;border-top:1px solid #ebebeb;">
+    <p style="font-size:13px;color:#777;line-height:1.8;margin:24px 0 0;">
+      ${isReceipt
+        ? `Thank you for your business, ${inq.first_name}. This receipt confirms payment in full for the above services. Please retain this for your records.`
+        : `Hi ${inq.first_name}, please find your invoice above. If you have any questions, simply reply to this email or reach us at deploy@clearcommsolutions.com.`
+      }
+    </p>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td bgcolor="#0E0E0F" style="background-color:#0E0E0F;padding:24px 40px;text-align:center;">
+    <div style="font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#F0A500;font-family:Courier New,monospace;margin-bottom:6px;">ClearComm Solutions</div>
+    <div style="font-size:11px;color:#444;">deploy@clearcommsolutions.com</div>
+  </td></tr>
+
+</table>
+<!-- /Card -->
+
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+async function fetchInvoiceWithInquiry(invoiceId) {
+  const { rows } = await pool.query(`
+    SELECT
+      i.first_name, i.last_name, i.email, i.company, i.industry, i.location, i.start_date,
+      inv.id, inv.ref_num, inv.job_id, inv.job_number, inv.invoice_date, inv.due_date,
+      inv.daily_rate, inv.total_days, inv.cost, inv.promo, inv.promo_amount,
+      inv.paid, inv.paid_date, inv.notes
+    FROM inquiries i
+    JOIN invoices inv ON inv.inquiry_id = i.id
+    WHERE inv.id = $1
+  `, [invoiceId]);
+  return rows[0] || null;
+}
+
+app.post('/api/admin/invoices/:id/send-invoice', requireAdmin, async (req, res) => {
+  try {
+    const row = await fetchInvoiceWithInquiry(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Invoice not found' });
+    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location, start_date: row.start_date };
+    const inv = row;
+    const toEmail = req.body.toEmail || row.email;
+    await mailer.sendEmail({
+      From: 'ClearComm Solutions <deploy@clearcommsolutions.com>',
+      To: toEmail,
+      Subject: `Invoice ${inv.job_number || inv.ref_num} — ${inq.company}`,
+      HtmlBody: buildInvoiceHtml({ inq, inv, isReceipt: false }),
+      TextBody: `ClearComm Solutions — Invoice ${inv.job_number || inv.ref_num}\n\nBilled to: ${inq.first_name} ${inq.last_name} (${inq.company})\nTotal Due: $${(parseFloat(inv.cost || 0) - parseFloat(inv.promo_amount || 0)).toFixed(2)}\n\nQuestions? Reply to this email or contact deploy@clearcommsolutions.com`,
+    });
+    res.json({ ok: true, sentTo: toEmail });
+  } catch (err) {
+    console.error('Send invoice error:', err.message);
+    res.status(500).json({ error: 'Failed to send invoice' });
+  }
+});
+
+app.post('/api/admin/invoices/:id/send-receipt', requireAdmin, async (req, res) => {
+  try {
+    const row = await fetchInvoiceWithInquiry(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Invoice not found' });
+    if (!row.paid) return res.status(400).json({ error: 'Invoice is not marked as paid' });
+    const inq = { first_name: row.first_name, last_name: row.last_name, email: row.email, company: row.company, industry: row.industry, location: row.location, start_date: row.start_date };
+    const inv = row;
+    const toEmail = req.body.toEmail || row.email;
+    await mailer.sendEmail({
+      From: 'ClearComm Solutions <deploy@clearcommsolutions.com>',
+      To: toEmail,
+      Subject: `Receipt — ${inv.job_number || inv.ref_num} — ${inq.company}`,
+      HtmlBody: buildInvoiceHtml({ inq, inv, isReceipt: true }),
+      TextBody: `ClearComm Solutions — Receipt\n\nThis confirms payment in full for ${inq.first_name} ${inq.last_name} (${inq.company}).\nTotal Paid: $${(parseFloat(inv.cost || 0) - parseFloat(inv.promo_amount || 0)).toFixed(2)}\n\nThank you for your business.`,
+    });
+    res.json({ ok: true, sentTo: toEmail });
+  } catch (err) {
+    console.error('Send receipt error:', err.message);
+    res.status(500).json({ error: 'Failed to send receipt' });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
