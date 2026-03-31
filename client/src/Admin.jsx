@@ -581,6 +581,56 @@ function InvoiceRow({ record: r, password, onSaved }) {
   )
 }
 
+function InvoiceCompanyGroup({ group, password, onSaved, invoiceHeader, totalsRow }) {
+  const [open, setOpen] = useState(false)
+  const totalCost = group.rows.reduce((s, r) => s + parseFloat(r.cost || 0), 0)
+  const totalNet  = group.rows.reduce((s, r) => s + (parseFloat(r.cost || 0) - parseFloat(r.promo_amount || 0)), 0)
+  const paidCount = group.rows.filter(r => r.paid).length
+
+  return (
+    <div style={{ background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '4px' }}>
+      <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+            <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)', letterSpacing: '0.04em' }}>{group.name}</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)', background: 'var(--ink3)', border: '1px solid var(--wire)', padding: '2px 8px' }}>
+              {group.rows.length} invoice{group.rows.length !== 1 ? 's' : ''}
+            </span>
+            {paidCount > 0 && (
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: '#00C07F', background: 'rgba(0,192,127,0.1)', border: '1px solid rgba(0,192,127,0.35)', padding: '2px 8px', letterSpacing: '0.08em' }}>
+                {paidCount} paid
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            {totalCost > 0 && (
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+                Total <span style={{ color: 'var(--text)' }}>${totalCost.toFixed(2)}</span>
+              </span>
+            )}
+            {totalNet !== totalCost && totalCost > 0 && (
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+                Net <span style={{ color: 'var(--signal)' }}>${totalNet.toFixed(2)}</span>
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>{open ? '▴' : '▾'}</div>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: '1px solid var(--wire)', padding: '4px 16px 16px' }}>
+          {invoiceHeader}
+          {group.rows.map((r, i) => (
+            <InvoiceRow key={r.inv_id || i} record={r} password={password} onSaved={onSaved} />
+          ))}
+          {totalsRow(group.rows)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CompanyGroup({ company, jobs, password, onStatusChange, onNotesSaved, emailFlags }) {
   const [open, setOpen] = useState(false)
   const statuses = ['new', 'active', 'complete']
@@ -639,8 +689,9 @@ export default function Admin({ onExit }) {
   const [filter, setFilter]             = useState('all')
   const [view, setView]                 = useState('inquiries')
   const [listMode, setListMode]         = useState('list')
-  const [invoiceRecords, setInvoiceRecords] = useState([])
-  const [invoiceFilter, setInvoiceFilter]   = useState('pending')
+  const [invoiceRecords, setInvoiceRecords]   = useState([])
+  const [invoiceFilter, setInvoiceFilter]     = useState('pending')
+  const [invoiceListMode, setInvoiceListMode] = useState('list')
 
   const load = useCallback(async (pass) => {
     setLoading(true)
@@ -863,54 +914,82 @@ export default function Admin({ onExit }) {
           const filtered = invoiceRecords.filter(r => categorize(r) === invoiceFilter)
           const countOf = (k) => invoiceRecords.filter(r => categorize(r) === k).length
 
+          const invoiceHeader = (
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
+              <span>Company / Contact</span><span>Job</span><span>Day Rate</span>
+              <span>Days</span><span>Total</span><span>Net</span><span>Due / Paid</span><span></span>
+            </div>
+          )
+
+          const totalsRow = (rows) => {
+            if (!rows.some(r => r.cost)) return null
+            const totalCost = rows.reduce((s, r) => s + parseFloat(r.cost || 0), 0)
+            const totalNet  = rows.reduce((s, r) => s + (parseFloat(r.cost || 0) - parseFloat(r.promo_amount || 0)), 0)
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '13px 16px', borderTop: '1px solid var(--wire)', marginTop: '4px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', gridColumn: '1 / 5', textAlign: 'right' }}>Totals</div>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)' }}>${totalCost.toFixed(2)}</div>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--signal)' }}>${totalNet.toFixed(2)}</div>
+                <div />
+              </div>
+            )
+          }
+
+          // Build company groups for the company view
+          const invoiceGroups = (() => {
+            const map = {}
+            filtered.forEach(r => {
+              const key = (r.company || 'Unknown').toLowerCase().trim()
+              if (!map[key]) map[key] = { name: r.company || 'Unknown', rows: [] }
+              map[key].rows.push(r)
+            })
+            return Object.values(map)
+          })()
+
           return (
             <>
-              <div style={{ display: 'flex', gap: '2px', marginBottom: '28px' }}>
-                {INVOICE_TABS.map(({ key, label, color }) => (
-                  <button key={key} onClick={() => setInvoiceFilter(key)} style={{
-                    background: invoiceFilter === key ? color : 'var(--ink3)',
-                    color: invoiceFilter === key ? '#000' : 'var(--dim)',
-                    border: `1px solid ${invoiceFilter === key ? color : 'var(--wire)'}`,
-                    padding: '9px 22px', fontFamily: "'JetBrains Mono',monospace",
-                    fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-                  }}>{label} ({countOf(key)})</button>
-                ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  {INVOICE_TABS.map(({ key, label, color }) => (
+                    <button key={key} onClick={() => setInvoiceFilter(key)} style={{
+                      background: invoiceFilter === key ? color : 'var(--ink3)',
+                      color: invoiceFilter === key ? '#000' : 'var(--dim)',
+                      border: `1px solid ${invoiceFilter === key ? color : 'var(--wire)'}`,
+                      padding: '9px 22px', fontFamily: "'JetBrains Mono',monospace",
+                      fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                    }}>{label} ({countOf(key)})</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  {[['list', 'List'], ['company', 'By Company']].map(([m, label]) => (
+                    <button key={m} onClick={() => setInvoiceListMode(m)} style={{
+                      background: invoiceListMode === m ? 'var(--ink4)' : 'transparent',
+                      color: invoiceListMode === m ? 'var(--signal)' : 'var(--faint)',
+                      border: `1px solid ${invoiceListMode === m ? 'var(--sigborder)' : 'var(--wire)'}`,
+                      padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace",
+                      fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                    }}>{label}</button>
+                  ))}
+                </div>
               </div>
 
               {filtered.length === 0 ? (
                 <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
                   No records in this category.
                 </div>
-              ) : (
+              ) : invoiceListMode === 'list' ? (
                 <div>
-                  {/* Header */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
-                    <span>Company / Contact</span>
-                    <span>Job</span>
-                    <span>Day Rate</span>
-                    <span>Days</span>
-                    <span>Total</span>
-                    <span>Net</span>
-                    <span>Due / Paid</span>
-                    <span></span>
-                  </div>
+                  {invoiceHeader}
                   {filtered.map((r, i) => (
                     <InvoiceRow key={r.inv_id || i} record={r} password={password} onSaved={handleInvoiceSaved} />
                   ))}
-
-                  {/* Totals row */}
-                  {filtered.some(r => r.cost) && (() => {
-                    const totalCost = filtered.reduce((s, r) => s + parseFloat(r.cost || 0), 0)
-                    const totalNet  = filtered.reduce((s, r) => s + (parseFloat(r.cost || 0) - parseFloat(r.promo_amount || 0)), 0)
-                    return (
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '13px 16px', borderTop: '1px solid var(--wire)', marginTop: '4px' }}>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', gridColumn: '1 / 5', textAlign: 'right' }}>Totals</div>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)' }}>${totalCost.toFixed(2)}</div>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--signal)' }}>${totalNet.toFixed(2)}</div>
-                        <div />
-                      </div>
-                    )
-                  })()}
+                  {totalsRow(filtered)}
+                </div>
+              ) : (
+                <div>
+                  {invoiceGroups.map(group => (
+                    <InvoiceCompanyGroup key={group.name} group={group} password={password} onSaved={handleInvoiceSaved} invoiceHeader={invoiceHeader} totalsRow={totalsRow} />
+                  ))}
                 </div>
               )}
             </>
