@@ -31,7 +31,7 @@ function StatCard({ label, value, color }) {
 
 function InquiryCard({ inquiry, password, onStatusChange, onNotesSaved }) {
   const [open, setOpen]           = useState(false)
-  const [notes, setNotes]         = useState(inquiry.admin_notes || '')
+  const [notes, setNotes]         = useState('')
   const [savingNotes, setSaving]  = useState(false)
   const [savedNote, setSavedNote] = useState(false)
   const [activity, setActivity]   = useState(null)
@@ -837,9 +837,7 @@ export default function Admin({ onExit }) {
     setInquiries(prev => prev.map(i => i.id === id ? { ...i, status } : i))
   }
 
-  const handleNotesSaved = (id) => {
-    setInquiries(prev => prev.map(i => i.id === id ? { ...i, admin_notes: '' } : i))
-  }
+  const handleNotesSaved = () => {}
 
   const handleInvoiceSaved = (updated) => {
     setInvoiceRecords(prev => prev.map(r =>
