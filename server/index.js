@@ -53,6 +53,22 @@ async function initDb() {
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 
+    CREATE TABLE IF NOT EXISTS invoices (
+      id            SERIAL PRIMARY KEY,
+      inquiry_id    INTEGER NOT NULL REFERENCES inquiries(id) ON DELETE CASCADE,
+      ref_num       TEXT NOT NULL,
+      job_number    TEXT,
+      invoice_date  DATE,
+      due_date      DATE,
+      cost          NUMERIC(10,2),
+      promo         TEXT,
+      promo_amount  NUMERIC(10,2),
+      paid          BOOLEAN DEFAULT FALSE,
+      paid_date     DATE,
+      notes         TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS admin_activity (
       id           SERIAL PRIMARY KEY,
       inquiry_id   INTEGER NOT NULL REFERENCES inquiries(id) ON DELETE CASCADE,
@@ -290,6 +306,45 @@ app.get('/api/admin/inquiries/:id/activity', requireAdmin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
+app.get('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE inquiry_id=$1 LIMIT 1', [req.params.id]);
+    res.json(rows[0] || null);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch invoice' });
+  }
+});
+
+app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
+  try {
+    const { refNum, jobNumber, invoiceDate, dueDate, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO invoices (inquiry_id, ref_num, job_number, invoice_date, due_date, cost, promo, promo_amount, paid, paid_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.params.id, refNum, jobNumber, invoiceDate || null, dueDate || null, cost || null,
+       promo || null, promoAmount || null, paid || false, paidDate || null, notes || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create invoice' });
+  }
+});
+
+app.patch('/api/admin/invoices/:id', requireAdmin, async (req, res) => {
+  try {
+    const { jobNumber, invoiceDate, dueDate, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE invoices SET job_number=$1, invoice_date=$2, due_date=$3, cost=$4,
+       promo=$5, promo_amount=$6, paid=$7, paid_date=$8, notes=$9 WHERE id=$10 RETURNING *`,
+      [jobNumber, invoiceDate || null, dueDate || null, cost || null,
+       promo || null, promoAmount || null, paid || false, paidDate || null, notes || null, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update invoice' });
   }
 });
 
