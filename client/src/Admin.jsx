@@ -204,6 +204,12 @@ const sectionLabel = {
   textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '10px',
 }
 
+const inputStyle = {
+  background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)',
+  padding: '7px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px',
+  outline: 'none', width: '100%',
+}
+
 function Row({ k, v }) {
   return (
     <div style={{ display: 'flex', gap: '10px', marginBottom: '6px', fontSize: '12px' }}>
@@ -427,6 +433,154 @@ function InvoicePanel({ inquiry, password }) {
   )
 }
 
+function InvoiceRow({ record: r, password, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [form, setForm]       = useState({
+    invoiceDate: r.invoice_date ? r.invoice_date.slice(0, 10) : '',
+    dueDate:     r.due_date     ? r.due_date.slice(0, 10) : '',
+    dailyRate:   r.daily_rate   || '',
+    totalDays:   r.total_days   || '',
+    promo:       r.promo        || '',
+    promoAmount: r.promo_amount || '',
+    paid:        r.paid         || false,
+    paidDate:    r.paid_date    ? r.paid_date.slice(0, 10) : '',
+    notes:       r.inv_notes    || '',
+  })
+
+  const computedCost = (form.dailyRate && form.totalDays)
+    ? parseFloat(form.dailyRate) * parseFloat(form.totalDays)
+    : null
+
+  const save = async () => {
+    setSaving(true)
+    const body = {
+      invoiceDate: form.invoiceDate || null,
+      dueDate:     form.dueDate     || null,
+      dailyRate:   form.dailyRate   ? parseFloat(form.dailyRate)   : null,
+      totalDays:   form.totalDays   ? parseFloat(form.totalDays)   : null,
+      cost:        computedCost     !== null ? computedCost         : null,
+      promo:       form.promo       || null,
+      promoAmount: form.promoAmount ? parseFloat(form.promoAmount) : null,
+      paid:        form.paid === true,
+      paidDate:    form.paidDate    || null,
+      notes:       form.notes       || null,
+    }
+    const res = await fetch(`/api/admin/invoices/${r.inv_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify(body),
+    })
+    const updated = await res.json()
+    setSaving(false)
+    setEditing(false)
+    onSaved(updated)
+  }
+
+  const cost = parseFloat(r.cost || 0)
+  const disc = parseFloat(r.promo_amount || 0)
+  const net  = cost - disc
+  const tabColor = r.paid ? '#00C07F' : (r.status || 'new') === 'complete' ? '#E84040' : (r.status || 'new') === 'active' ? '#F0A500' : '#3B8EFF'
+
+  return (
+    <div style={{ background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '3px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '13px 16px', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)', marginBottom: '2px' }}>{r.company}</div>
+          <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{r.first_name} {r.last_name} · {r.ref_num}</div>
+        </div>
+        <div>
+          {r.job_id && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)', marginBottom: '2px' }}>{r.job_id}</div>}
+          {r.job_number && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--dim)' }}>#{r.job_number}</div>}
+          {!r.job_id && !r.job_number && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>—</span>}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+          {r.daily_rate ? `$${parseFloat(r.daily_rate).toFixed(2)}` : '—'}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
+          {r.total_days || '—'}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)' }}>
+          {r.cost ? `$${cost.toFixed(2)}` : '—'}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: r.promo_amount ? 'var(--signal)' : 'var(--dim)' }}>
+          {r.cost ? `$${net.toFixed(2)}` : '—'}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: tabColor }}>
+          {r.paid && r.paid_date ? r.paid_date.slice(0,10) : r.due_date ? `Due ${r.due_date.slice(0,10)}` : '—'}
+        </div>
+        <button onClick={() => setEditing(e => !e)} style={{
+          background: 'transparent', border: '1px solid var(--wire)', color: editing ? 'var(--alert)' : 'var(--dim)',
+          padding: '4px 10px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px',
+          letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0,
+          borderColor: editing ? 'var(--alert)' : 'var(--wire)',
+        }}>{editing ? 'Cancel' : 'Edit'}</button>
+      </div>
+
+      {editing && (
+        <div style={{ borderTop: '1px solid var(--wire)', padding: '20px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Invoice Date</div>
+              <input type="date" value={form.invoiceDate} onChange={e => setForm(p => ({ ...p, invoiceDate: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Due Date</div>
+              <input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Daily Rate ($)</div>
+              <input type="number" value={form.dailyRate} onChange={e => setForm(p => ({ ...p, dailyRate: e.target.value }))} placeholder="0.00" style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Total Days</div>
+              <input type="number" value={form.totalDays} onChange={e => setForm(p => ({ ...p, totalDays: e.target.value }))} placeholder="0" style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Total Cost</div>
+              <div style={{ padding: '7px 10px', background: 'var(--ink4)', border: '1px solid var(--wire)', fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: computedCost !== null ? 'var(--signal)' : 'var(--faint)' }}>
+                {computedCost !== null ? `$${computedCost.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Promo Code</div>
+              <input type="text" value={form.promo} onChange={e => setForm(p => ({ ...p, promo: e.target.value }))} placeholder="Optional" style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Discount ($)</div>
+              <input type="number" value={form.promoAmount} onChange={e => setForm(p => ({ ...p, promoAmount: e.target.value }))} placeholder="0.00" style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Paid Date</div>
+              <input type="date" value={form.paidDate} onChange={e => setForm(p => ({ ...p, paidDate: e.target.value }))} style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer' }} onClick={() => setForm(p => ({ ...p, paid: !p.paid }))}>
+            <div style={{ width: '18px', height: '18px', flexShrink: 0, background: form.paid ? '#00C07F' : 'var(--ink3)', border: `1px solid ${form.paid ? '#00C07F' : 'var(--wire)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, border-color 0.15s' }}>
+              {form.paid && (
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                  <polyline points="1 4 4 7 9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: form.paid ? '#00C07F' : 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mark as Paid</span>
+          </div>
+
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ ...sectionLabel, marginBottom: '6px' }}>Notes</div>
+            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Invoice notes..." style={{ width: '100%', background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)', padding: '9px 12px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px', outline: 'none', resize: 'vertical', minHeight: '60px' }} />
+          </div>
+
+          <button onClick={save} disabled={saving} style={{ background: 'var(--signal)', color: '#000', border: 'none', padding: '9px 24px', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, cursor: 'pointer' }}>
+            {saving ? 'Saving...' : 'Save Invoice'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CompanyGroup({ company, jobs, password, onStatusChange, onNotesSaved, emailFlags }) {
   const [open, setOpen] = useState(false)
   const statuses = ['new', 'active', 'complete']
@@ -522,6 +676,25 @@ export default function Admin({ onExit }) {
 
   const handleNotesSaved = (id) => {
     setInquiries(prev => prev.map(i => i.id === id ? { ...i, admin_notes: '' } : i))
+  }
+
+  const handleInvoiceSaved = (updated) => {
+    setInvoiceRecords(prev => prev.map(r =>
+      r.inv_id === updated.id
+        ? { ...r,
+            invoice_date: updated.invoice_date,
+            due_date:     updated.due_date,
+            daily_rate:   updated.daily_rate,
+            total_days:   updated.total_days,
+            cost:         updated.cost,
+            promo:        updated.promo,
+            promo_amount: updated.promo_amount,
+            paid:         updated.paid,
+            paid_date:    updated.paid_date,
+            inv_notes:    updated.notes,
+          }
+        : r
+    ))
   }
 
   const filtered = filter === 'all' ? inquiries : inquiries.filter(i => (i.status || 'new') === filter)
@@ -711,7 +884,7 @@ export default function Admin({ onExit }) {
               ) : (
                 <div>
                   {/* Header */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
                     <span>Company / Contact</span>
                     <span>Job</span>
                     <span>Day Rate</span>
@@ -719,48 +892,18 @@ export default function Admin({ onExit }) {
                     <span>Total</span>
                     <span>Net</span>
                     <span>Due / Paid</span>
+                    <span></span>
                   </div>
-                  {filtered.map((r, i) => {
-                    const cost    = parseFloat(r.cost || 0)
-                    const disc    = parseFloat(r.promo_amount || 0)
-                    const net     = cost - disc
-                    const tabCfg  = INVOICE_TABS.find(t => t.key === categorize(r))
-                    return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '13px 16px', background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '3px', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)', marginBottom: '2px' }}>{r.company}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{r.first_name} {r.last_name} · {r.ref_num}</div>
-                        </div>
-                        <div>
-                          {r.job_id && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)', marginBottom: '2px' }}>{r.job_id}</div>}
-                          {r.job_number && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--dim)' }}>#{r.job_number}</div>}
-                          {!r.job_id && !r.job_number && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>—</span>}
-                        </div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
-                          {r.daily_rate ? `$${parseFloat(r.daily_rate).toFixed(2)}` : '—'}
-                        </div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--dim)' }}>
-                          {r.total_days || '—'}
-                        </div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)' }}>
-                          {r.cost ? `$${cost.toFixed(2)}` : '—'}
-                        </div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: r.promo_amount ? 'var(--signal)' : 'var(--dim)' }}>
-                          {r.cost ? `$${net.toFixed(2)}` : '—'}
-                        </div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: tabCfg?.color || 'var(--faint)' }}>
-                          {r.paid && r.paid_date ? r.paid_date.slice(0,10) : r.due_date ? `Due ${r.due_date.slice(0,10)}` : '—'}
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {filtered.map((r, i) => (
+                    <InvoiceRow key={r.inv_id || i} record={r} password={password} onSaved={handleInvoiceSaved} />
+                  ))}
 
                   {/* Totals row */}
                   {filtered.some(r => r.cost) && (() => {
                     const totalCost = filtered.reduce((s, r) => s + parseFloat(r.cost || 0), 0)
                     const totalNet  = filtered.reduce((s, r) => s + (parseFloat(r.cost || 0) - parseFloat(r.promo_amount || 0)), 0)
                     return (
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', padding: '13px 16px', borderTop: '1px solid var(--wire)', marginTop: '4px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto', gap: '12px', padding: '13px 16px', borderTop: '1px solid var(--wire)', marginTop: '4px' }}>
                         <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', gridColumn: '1 / 5', textAlign: 'right' }}>Totals</div>
                         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--text)' }}>${totalCost.toFixed(2)}</div>
                         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '20px', color: 'var(--signal)' }}>${totalNet.toFixed(2)}</div>
