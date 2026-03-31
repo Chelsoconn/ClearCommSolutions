@@ -57,9 +57,12 @@ async function initDb() {
       id            SERIAL PRIMARY KEY,
       inquiry_id    INTEGER NOT NULL REFERENCES inquiries(id) ON DELETE CASCADE,
       ref_num       TEXT NOT NULL,
+      job_id        TEXT,
       job_number    TEXT,
       invoice_date  DATE,
       due_date      DATE,
+      daily_rate    NUMERIC(10,2),
+      total_days    NUMERIC(6,1),
       cost          NUMERIC(10,2),
       promo         TEXT,
       promo_amount  NUMERIC(10,2),
@@ -68,6 +71,9 @@ async function initDb() {
       notes         TEXT,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS job_id TEXT;
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2);
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_days NUMERIC(6,1);
 
     CREATE TABLE IF NOT EXISTS admin_activity (
       id           SERIAL PRIMARY KEY,
@@ -320,12 +326,14 @@ app.get('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
   try {
-    const { refNum, jobNumber, invoiceDate, dueDate, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { refNum, jobNumber, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const jobId = 'JB-' + Math.random().toString(36).toUpperCase().slice(2, 8);
     const { rows } = await pool.query(
-      `INSERT INTO invoices (inquiry_id, ref_num, job_number, invoice_date, due_date, cost, promo, promo_amount, paid, paid_date, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.params.id, refNum, jobNumber, invoiceDate || null, dueDate || null, cost || null,
-       promo || null, promoAmount || null, paid || false, paidDate || null, notes || null]
+      `INSERT INTO invoices (inquiry_id, ref_num, job_id, job_number, invoice_date, due_date, daily_rate, total_days, cost, promo, promo_amount, paid, paid_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [req.params.id, refNum, jobId, jobNumber || null, invoiceDate || null, dueDate || null,
+       dailyRate || null, totalDays || null, cost || null,
+       promo || null, promoAmount || null, paid === true, paidDate || null, notes || null]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -335,12 +343,12 @@ app.post('/api/admin/inquiries/:id/invoice', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/invoices/:id', requireAdmin, async (req, res) => {
   try {
-    const { jobNumber, invoiceDate, dueDate, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
+    const { jobNumber, invoiceDate, dueDate, dailyRate, totalDays, cost, promo, promoAmount, paid, paidDate, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE invoices SET job_number=$1, invoice_date=$2, due_date=$3, cost=$4,
-       promo=$5, promo_amount=$6, paid=$7, paid_date=$8, notes=$9 WHERE id=$10 RETURNING *`,
-      [jobNumber, invoiceDate || null, dueDate || null, cost || null,
-       promo || null, promoAmount || null, paid || false, paidDate || null, notes || null, req.params.id]
+      `UPDATE invoices SET job_number=$1, invoice_date=$2, due_date=$3, daily_rate=$4, total_days=$5,
+       cost=$6, promo=$7, promo_amount=$8, paid=$9, paid_date=$10, notes=$11 WHERE id=$12 RETURNING *`,
+      [jobNumber || null, invoiceDate || null, dueDate || null, dailyRate || null, totalDays || null,
+       cost || null, promo || null, promoAmount || null, paid === true, paidDate || null, notes || null, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {

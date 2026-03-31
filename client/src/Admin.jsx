@@ -214,11 +214,12 @@ function Row({ k, v }) {
 }
 
 function InvoicePanel({ inquiry, password }) {
-  const [invoice, setInvoice]   = useState(undefined) // undefined = not loaded
-  const [editing, setEditing]   = useState(false)
-  const [saving, setSaving]     = useState(false)
-  const [form, setForm]         = useState({
-    jobNumber: '', invoiceDate: '', dueDate: '', cost: '',
+  const [invoice, setInvoice] = useState(undefined)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [form, setForm]       = useState({
+    jobNumber: '', invoiceDate: '', dueDate: '',
+    dailyRate: '', totalDays: '',
     promo: '', promoAmount: '', paid: false, paidDate: '', notes: '',
   })
 
@@ -227,72 +228,74 @@ function InvoicePanel({ inquiry, password }) {
       headers: { 'x-admin-password': password },
     }).then(r => r.json()).then(data => {
       setInvoice(data)
-      if (data) {
-        setForm({
-          jobNumber:   data.job_number   || '',
-          invoiceDate: data.invoice_date ? data.invoice_date.slice(0, 10) : '',
-          dueDate:     data.due_date     ? data.due_date.slice(0, 10) : '',
-          cost:        data.cost         || '',
-          promo:       data.promo        || '',
-          promoAmount: data.promo_amount || '',
-          paid:        data.paid         || false,
-          paidDate:    data.paid_date    ? data.paid_date.slice(0, 10) : '',
-          notes:       data.notes        || '',
-        })
-      }
+      if (data) setForm({
+        jobNumber:   data.job_number   || '',
+        invoiceDate: data.invoice_date ? data.invoice_date.slice(0, 10) : '',
+        dueDate:     data.due_date     ? data.due_date.slice(0, 10) : '',
+        dailyRate:   data.daily_rate   || '',
+        totalDays:   data.total_days   || '',
+        promo:       data.promo        || '',
+        promoAmount: data.promo_amount || '',
+        paid:        data.paid         || false,
+        paidDate:    data.paid_date    ? data.paid_date.slice(0, 10) : '',
+        notes:       data.notes        || '',
+      })
     })
   }, [inquiry.id, password])
+
+  const computedCost = (form.dailyRate && form.totalDays)
+    ? (parseFloat(form.dailyRate) * parseFloat(form.totalDays))
+    : null
 
   const save = async () => {
     setSaving(true)
     const body = {
-      refNum: inquiry.ref_num,
+      refNum:      inquiry.ref_num,
       jobNumber:   form.jobNumber   || null,
       invoiceDate: form.invoiceDate || null,
       dueDate:     form.dueDate     || null,
-      cost:        form.cost        ? parseFloat(form.cost) : null,
+      dailyRate:   form.dailyRate   ? parseFloat(form.dailyRate)   : null,
+      totalDays:   form.totalDays   ? parseFloat(form.totalDays)   : null,
+      cost:        computedCost     !== null ? computedCost         : null,
       promo:       form.promo       || null,
       promoAmount: form.promoAmount ? parseFloat(form.promoAmount) : null,
-      paid:        form.paid,
+      paid:        form.paid === true,
       paidDate:    form.paidDate    || null,
       notes:       form.notes       || null,
     }
-    let updated
-    if (invoice) {
-      const r = await fetch(`/api/admin/invoices/${invoice.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify(body),
-      })
-      updated = await r.json()
-    } else {
-      const r = await fetch(`/api/admin/inquiries/${inquiry.id}/invoice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify(body),
-      })
-      updated = await r.json()
-    }
+    const url = invoice
+      ? `/api/admin/invoices/${invoice.id}`
+      : `/api/admin/inquiries/${inquiry.id}/invoice`
+    const method = invoice ? 'PATCH' : 'POST'
+    const r = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify(body),
+    })
+    const updated = await r.json()
     setInvoice(updated)
     setSaving(false)
     setEditing(false)
   }
 
-  const f = (k, type = 'text') => (
+  const field = (k, type = 'text', placeholder = '') => (
     <input
       type={type}
-      value={form[k]}
-      onChange={e => setForm(p => ({ ...p, [k]: type === 'checkbox' ? e.target.checked : e.target.value }))}
-      checked={type === 'checkbox' ? form[k] : undefined}
-      style={type === 'checkbox' ? { accentColor: 'var(--signal)', width: '16px', height: '16px', cursor: 'pointer' } : {
-        background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)',
-        padding: '7px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px',
-        outline: 'none', width: '100%',
-      }}
+      placeholder={placeholder}
+      {...(type === 'checkbox'
+        ? { checked: form[k], onChange: e => setForm(p => ({ ...p, [k]: e.target.checked }) )}
+        : { value: form[k],   onChange: e => setForm(p => ({ ...p, [k]: e.target.value })) }
+      )}
+      style={type === 'checkbox'
+        ? { accentColor: 'var(--signal)', width: '16px', height: '16px', cursor: 'pointer' }
+        : { background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)', padding: '7px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px', outline: 'none', width: '100%' }
+      }
     />
   )
 
-  const net = invoice ? (parseFloat(invoice.cost || 0) - parseFloat(invoice.promo_amount || 0)) : null
+  const invCost = invoice ? parseFloat(invoice.cost || 0) : 0
+  const invDiscount = invoice ? parseFloat(invoice.promo_amount || 0) : 0
+  const net = invCost - invDiscount
   const statusColor = invoice?.paid ? '#00C07F' : invoice?.cost ? '#F0A500' : 'var(--faint)'
   const statusLabel = invoice?.paid ? 'Paid' : invoice?.cost ? 'Unpaid' : '—'
 
@@ -301,7 +304,12 @@ function InvoicePanel({ inquiry, password }) {
   return (
     <div style={{ borderTop: '1px solid var(--wire)', paddingTop: '20px', marginTop: '4px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <div style={sectionLabel}>Invoice</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={sectionLabel}>Invoice</div>
+          {invoice?.job_id && (
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.08em' }}>{invoice.job_id}</span>
+          )}
+        </div>
         <button onClick={() => setEditing(e => !e)} style={{
           background: 'transparent', border: '1px solid var(--wire)', color: 'var(--dim)',
           padding: '4px 12px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px',
@@ -318,10 +326,11 @@ function InvoicePanel({ inquiry, password }) {
             <Row k="Due"      v={invoice.due_date ? invoice.due_date.slice(0,10) : '—'} />
           </div>
           <div>
-            <Row k="Cost"     v={invoice.cost ? `$${parseFloat(invoice.cost).toFixed(2)}` : '—'} />
-            <Row k="Promo"    v={invoice.promo || '—'} />
-            <Row k="Discount" v={invoice.promo_amount ? `-$${parseFloat(invoice.promo_amount).toFixed(2)}` : '—'} />
-            <Row k="Net"      v={net !== null && invoice.cost ? `$${net.toFixed(2)}` : '—'} />
+            <Row k="Day Rate" v={invoice.daily_rate ? `$${parseFloat(invoice.daily_rate).toFixed(2)}` : '—'} />
+            <Row k="Days"     v={invoice.total_days || '—'} />
+            <Row k="Total"    v={invoice.cost ? `$${parseFloat(invoice.cost).toFixed(2)}` : '—'} />
+            <Row k="Promo"    v={invoice.promo ? `${invoice.promo}${invoice.promo_amount ? ` (−$${parseFloat(invoice.promo_amount).toFixed(2)})` : ''}` : '—'} />
+            <Row k="Net"      v={invoice.cost ? `$${net.toFixed(2)}` : '—'} />
           </div>
           <div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
@@ -343,38 +352,52 @@ function InvoicePanel({ inquiry, password }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Job #</div>
-              {f('jobNumber')}
+              {field('jobNumber', 'text', 'e.g. 001')}
             </div>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Invoice Date</div>
-              {f('invoiceDate', 'date')}
+              {field('invoiceDate', 'date')}
             </div>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Due Date</div>
-              {f('dueDate', 'date')}
+              {field('dueDate', 'date')}
             </div>
             <div>
-              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Cost ($)</div>
-              {f('cost', 'number')}
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Daily Rate ($)</div>
+              {field('dailyRate', 'number', '0.00')}
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Total Days</div>
+              {field('totalDays', 'number', '0')}
+            </div>
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: '6px' }}>Total Cost</div>
+              <div style={{ padding: '7px 10px', background: 'var(--ink4)', border: '1px solid var(--wire)', fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: computedCost !== null ? 'var(--signal)' : 'var(--faint)' }}>
+                {computedCost !== null ? `$${computedCost.toFixed(2)}` : '—'}
+              </div>
             </div>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Promo Code</div>
-              {f('promo')}
+              {field('promo', 'text', 'Optional')}
             </div>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Discount ($)</div>
-              {f('promoAmount', 'number')}
+              {field('promoAmount', 'number', '0.00')}
             </div>
             <div>
               <div style={{ ...sectionLabel, marginBottom: '6px' }}>Paid Date</div>
-              {f('paidDate', 'date')}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '18px' }}>
-              {f('paid', 'checkbox')}
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mark as Paid</span>
+              {field('paidDate', 'date')}
             </div>
           </div>
-          <div style={{ marginBottom: '12px' }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            {field('paid', 'checkbox')}
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: form.paid ? '#00C07F' : 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Mark as Paid
+            </span>
+          </div>
+
+          <div style={{ marginBottom: '14px' }}>
             <div style={{ ...sectionLabel, marginBottom: '6px' }}>Notes</div>
             <textarea
               value={form.notes}
@@ -383,6 +406,7 @@ function InvoicePanel({ inquiry, password }) {
               style={{ width: '100%', background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)', padding: '9px 12px', fontFamily: "'DM Sans',sans-serif", fontSize: '12px', outline: 'none', resize: 'vertical', minHeight: '60px' }}
             />
           </div>
+
           <button onClick={save} disabled={saving} style={{
             background: 'var(--signal)', color: '#000', border: 'none',
             padding: '9px 24px', fontFamily: "'JetBrains Mono',monospace",
