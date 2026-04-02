@@ -797,6 +797,278 @@ function InvoiceCompanyGroup({ group, password, onSaved, invoiceHeader, totalsRo
   )
 }
 
+const ITEM_TYPES  = ['Radio', 'Battery', 'Headset', 'Charger', 'Other']
+const CONDITIONS  = ['Good', 'Fair', 'Needs Repair', 'Retired']
+
+const CONDITION_COLOR = {
+  'Good':         '#00C07F',
+  'Fair':         '#F0A500',
+  'Needs Repair': '#E84040',
+  'Retired':      '#555',
+}
+
+function EquipmentRow({ item, password, onUpdated, onDeleted }) {
+  const [open, setOpen]             = useState(false)
+  const [editing, setEditing]       = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [deleting, setDeleting]     = useState(false)
+  const [history, setHistory]       = useState(null)
+  const [checkoutMode, setCheckoutMode] = useState(false)
+  const [returning, setReturning]   = useState(false)
+  const [form, setForm]             = useState({
+    itemType:     item.item_type     || 'Radio',
+    customType:   item.custom_type   || '',
+    model:        item.model         || '',
+    serialNumber: item.serial_number || '',
+    purchaseDate: item.purchase_date ? item.purchase_date.slice(0, 10) : '',
+    condition:    item.condition     || 'Good',
+    notes:        item.notes         || '',
+  })
+  const [coForm, setCoForm] = useState({
+    personName: '', company: '', checkoutDate: '', notes: '',
+  })
+
+  const loadHistory = async () => {
+    const res = await fetch(`/api/admin/equipment/${item.id}/checkouts`, {
+      headers: { 'x-admin-password': password },
+    })
+    setHistory(await res.json())
+  }
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && history === null) loadHistory()
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const res = await fetch(`/api/admin/equipment/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({
+        itemType:     form.itemType,
+        customType:   form.customType || null,
+        model:        form.model      || null,
+        serialNumber: form.serialNumber || null,
+        purchaseDate: form.purchaseDate || null,
+        condition:    form.condition,
+        notes:        form.notes      || null,
+      }),
+    })
+    const updated = await res.json()
+    setSaving(false)
+    setEditing(false)
+    onUpdated(updated)
+  }
+
+  const doDelete = async () => {
+    if (!window.confirm(`Delete ${item.item_type} ${item.serial_number || ''}? This cannot be undone.`)) return
+    setDeleting(true)
+    await fetch(`/api/admin/equipment/${item.id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': password },
+    })
+    onDeleted(item.id)
+  }
+
+  const doCheckout = async () => {
+    if (!coForm.personName) return
+    setSaving(true)
+    const res = await fetch(`/api/admin/equipment/${item.id}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({
+        personName:   coForm.personName,
+        company:      coForm.company      || null,
+        checkoutDate: coForm.checkoutDate || null,
+        notes:        coForm.notes        || null,
+      }),
+    })
+    const co = await res.json()
+    setSaving(false)
+    setCheckoutMode(false)
+    setCoForm({ personName: '', company: '', checkoutDate: '', notes: '' })
+    loadHistory()
+    onUpdated({
+      ...item,
+      checkout_id:      co.id,
+      current_person:   co.person_name,
+      current_company:  co.company,
+      checkout_date:    co.checkout_date,
+    })
+  }
+
+  const doReturn = async () => {
+    if (!item.checkout_id) return
+    setReturning(true)
+    await fetch(`/api/admin/equipment/checkouts/${item.checkout_id}/return`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ returnDate: new Date().toISOString().slice(0, 10) }),
+    })
+    setReturning(false)
+    loadHistory()
+    onUpdated({ ...item, checkout_id: null, current_person: null, current_company: null, checkout_date: null })
+  }
+
+  const displayType = item.item_type === 'Other' ? (item.custom_type || 'Other') : item.item_type
+  const isOut = !!item.current_person
+
+  return (
+    <div style={{ background: 'var(--ink2)', border: '1px solid var(--wire)', marginBottom: '3px' }}>
+      {/* Row header */}
+      <div style={{ display: 'grid', gridTemplateColumns: '28px 1.4fr 1fr 1fr 1fr 1.2fr auto', gap: '12px', padding: '13px 16px', alignItems: 'center', cursor: 'pointer' }} onClick={toggle}>
+        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOut ? '#F0A500' : '#00C07F', flexShrink: 0 }} />
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--text)', marginBottom: '2px' }}>{displayType}</div>
+          {item.model && <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{item.model}</div>}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--signal)' }}>
+          {item.serial_number || <span style={{ color: 'var(--faint)' }}>No S/N</span>}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: CONDITION_COLOR[item.condition] || 'var(--dim)' }}>
+          {item.condition || '—'}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>
+          {item.purchase_date ? item.purchase_date.slice(0, 10) : '—'}
+        </div>
+        <div>
+          {isOut ? (
+            <>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#F0A500' }}>{item.current_person}</div>
+              {item.current_company && <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{item.current_company}</div>}
+            </>
+          ) : (
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#00C07F' }}>Available</span>
+          )}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>{open ? '▴' : '▾'}</div>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: '1px solid var(--wire)', padding: '18px 16px' }}>
+          {/* Action bar */}
+          {!editing && (
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button onClick={() => { setEditing(true); setCheckoutMode(false) }} style={{ background: 'transparent', border: '1px solid var(--wire)', color: 'var(--dim)', padding: '6px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Edit</button>
+              {isOut ? (
+                <button onClick={doReturn} disabled={returning} style={{ background: 'rgba(0,192,127,0.1)', border: '1px solid rgba(0,192,127,0.35)', color: '#00C07F', padding: '6px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
+                  {returning ? 'Returning…' : '↩ Mark Returned'}
+                </button>
+              ) : (
+                <button onClick={() => { setCheckoutMode(v => !v); setEditing(false) }} style={{ background: checkoutMode ? 'rgba(240,165,0,0.1)' : 'transparent', border: `1px solid ${checkoutMode ? 'rgba(240,165,0,0.35)' : 'var(--wire)'}`, color: checkoutMode ? '#F0A500' : 'var(--dim)', padding: '6px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
+                  {checkoutMode ? 'Cancel Checkout' : '↗ Check Out'}
+                </button>
+              )}
+              <button onClick={doDelete} disabled={deleting} style={{ background: 'transparent', border: '1px solid var(--alert)', color: 'var(--alert)', padding: '6px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', marginLeft: 'auto' }}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          )}
+
+          {/* Checkout form */}
+          {checkoutMode && !editing && (
+            <div style={{ background: 'var(--ink3)', border: '1px solid rgba(240,165,0,0.25)', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ ...sectionLabel, marginBottom: '12px' }}>Check Out Equipment</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Person Name *</div>
+                  <input value={coForm.personName} onChange={e => setCoForm(p => ({ ...p, personName: e.target.value }))} placeholder="Full name" style={inputStyle} />
+                </div>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Company</div>
+                  <input value={coForm.company} onChange={e => setCoForm(p => ({ ...p, company: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                </div>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Checkout Date</div>
+                  <input type="date" value={coForm.checkoutDate} onChange={e => setCoForm(p => ({ ...p, checkoutDate: e.target.value }))} style={inputStyle} />
+                </div>
+              </div>
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ ...sectionLabel, marginBottom: '4px' }}>Notes</div>
+                <input value={coForm.notes} onChange={e => setCoForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional" style={inputStyle} />
+              </div>
+              <button onClick={doCheckout} disabled={!coForm.personName || saving} style={{ background: '#F0A500', color: '#000', border: 'none', padding: '8px 20px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, cursor: coForm.personName ? 'pointer' : 'not-allowed' }}>
+                {saving ? 'Saving…' : 'Confirm Checkout'}
+              </button>
+            </div>
+          )}
+
+          {/* Edit form */}
+          {editing && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Type</div>
+                  <select value={form.itemType} onChange={e => setForm(p => ({ ...p, itemType: e.target.value }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {ITEM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                {form.itemType === 'Other' && (
+                  <div>
+                    <div style={{ ...sectionLabel, marginBottom: '4px' }}>Custom Type</div>
+                    <input value={form.customType} onChange={e => setForm(p => ({ ...p, customType: e.target.value }))} placeholder="e.g. Tablet" style={inputStyle} />
+                  </div>
+                )}
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Model</div>
+                  <input value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                </div>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Serial Number</div>
+                  <input value={form.serialNumber} onChange={e => setForm(p => ({ ...p, serialNumber: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                </div>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Purchase Date</div>
+                  <input type="date" value={form.purchaseDate} onChange={e => setForm(p => ({ ...p, purchaseDate: e.target.value }))} style={inputStyle} />
+                </div>
+                <div>
+                  <div style={{ ...sectionLabel, marginBottom: '4px' }}>Condition</div>
+                  <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ ...sectionLabel, marginBottom: '4px' }}>Notes</div>
+                <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional" style={inputStyle} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={save} disabled={saving} style={{ background: 'var(--signal)', color: '#000', border: 'none', padding: '8px 20px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save'}</button>
+                <button onClick={() => setEditing(false)} style={{ background: 'transparent', border: '1px solid var(--wire)', color: 'var(--dim)', padding: '8px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Checkout history */}
+          {history && (
+            <div>
+              <div style={sectionLabel}>Checkout History</div>
+              {history.length === 0 ? (
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--faint)' }}>No checkout history.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {history.map(co => (
+                    <div key={co.id} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr 100px', gap: '12px', fontSize: '11px', padding: '7px 0', borderBottom: '1px solid var(--wire)' }}>
+                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--faint)' }}>{co.checkout_date ? co.checkout_date.slice(0, 10) : '—'}</span>
+                      <span style={{ color: 'var(--text)' }}>{co.person_name}</span>
+                      <span style={{ color: 'var(--dim)' }}>{co.company || '—'}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: co.return_date ? '#00C07F' : '#F0A500' }}>
+                        {co.return_date ? `Ret ${co.return_date.slice(0, 10)}` : 'Out'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CompanyGroup({ company, jobs, password, onStatusChange, onNotesSaved, emailFlags }) {
   const [open, setOpen] = useState(false)
   const statuses = ['new', 'active', 'complete']
@@ -864,17 +1136,27 @@ export default function Admin({ onExit }) {
   const [invoiceSearch, setInvoiceSearch]     = useState('')
   const [invoiceDateFrom, setInvoiceDateFrom] = useState('')
   const [invoiceDateTo, setInvoiceDateTo]     = useState('')
+  const [equipmentItems, setEquipmentItems]   = useState([])
+  const [equipTypeFilter, setEquipTypeFilter] = useState('All')
+  const [equipSearch, setEquipSearch]         = useState('')
+  const [addEquipMode, setAddEquipMode]       = useState(false)
+  const [addEquipForm, setAddEquipForm]       = useState({
+    itemType: 'Radio', customType: '', model: '', serialNumber: '', purchaseDate: '', condition: 'Good', notes: '',
+  })
+  const [addEquipSaving, setAddEquipSaving]   = useState(false)
 
   const load = useCallback(async (pass) => {
     setLoading(true)
-    const [iq, st, invs] = await Promise.all([
+    const [iq, st, invs, equip] = await Promise.all([
       fetch('/api/admin/inquiries',  { headers: { 'x-admin-password': pass } }).then(r => r.json()),
       fetch('/api/admin/stats',      { headers: { 'x-admin-password': pass } }).then(r => r.json()),
       fetch('/api/admin/invoices',   { headers: { 'x-admin-password': pass } }).then(r => r.json()),
+      fetch('/api/admin/equipment',  { headers: { 'x-admin-password': pass } }).then(r => r.json()),
     ])
     setInquiries(Array.isArray(iq) ? iq : [])
     setStats(st.error ? null : st)
     setInvoiceRecords(Array.isArray(invs) ? invs : [])
+    setEquipmentItems(Array.isArray(equip) ? equip : [])
     setLoading(false)
   }, [])
 
@@ -1007,7 +1289,7 @@ export default function Admin({ onExit }) {
             <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '32px', color: 'var(--text)', lineHeight: 1 }}>ClearComm</div>
           </div>
           <div style={{ display: 'flex', gap: '2px' }}>
-            {[['inquiries', 'Inquiries'], ['invoices', 'Invoices'], ['analytics', 'Analytics']].map(([key, label]) => (
+            {[['inquiries', 'Inquiries'], ['invoices', 'Invoices'], ['inventory', 'Inventory'], ['analytics', 'Analytics']].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} style={{
                 background: view === key ? 'var(--signal)' : 'transparent',
                 color: view === key ? '#000' : 'var(--dim)',
@@ -1208,6 +1490,164 @@ export default function Admin({ onExit }) {
                   ))}
                 </div>
               )}
+            </>
+          )
+        })()}
+
+        {view === 'inventory' && (() => {
+          const checkedOut = equipmentItems.filter(e => !!e.current_person).length
+          const available  = equipmentItems.length - checkedOut
+
+          const typeOptions = ['All', ...ITEM_TYPES]
+
+          const displayed = equipmentItems.filter(e => {
+            const typeMatch = equipTypeFilter === 'All' ||
+              e.item_type === equipTypeFilter ||
+              (equipTypeFilter === 'Other' && e.item_type === 'Other')
+            const s = equipSearch.toLowerCase()
+            const textMatch = !equipSearch ||
+              e.item_type?.toLowerCase().includes(s) ||
+              e.custom_type?.toLowerCase().includes(s) ||
+              e.model?.toLowerCase().includes(s) ||
+              e.serial_number?.toLowerCase().includes(s) ||
+              e.current_person?.toLowerCase().includes(s) ||
+              e.current_company?.toLowerCase().includes(s) ||
+              e.condition?.toLowerCase().includes(s)
+            return typeMatch && textMatch
+          })
+
+          const addEquip = async () => {
+            if (!addEquipForm.itemType) return
+            setAddEquipSaving(true)
+            const res = await fetch('/api/admin/equipment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({
+                itemType:     addEquipForm.itemType,
+                customType:   addEquipForm.customType   || null,
+                model:        addEquipForm.model         || null,
+                serialNumber: addEquipForm.serialNumber  || null,
+                purchaseDate: addEquipForm.purchaseDate  || null,
+                condition:    addEquipForm.condition,
+                notes:        addEquipForm.notes         || null,
+              }),
+            })
+            const created = await res.json()
+            setEquipmentItems(prev => [created, ...prev])
+            setAddEquipSaving(false)
+            setAddEquipMode(false)
+            setAddEquipForm({ itemType: 'Radio', customType: '', model: '', serialNumber: '', purchaseDate: '', condition: 'Good', notes: '' })
+          }
+
+          return (
+            <>
+              {/* Stat cards */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '28px' }}>
+                <StatCard label="Total Items"   value={equipmentItems.length} />
+                <StatCard label="Checked Out"   value={checkedOut}  color="#F0A500" />
+                <StatCard label="Available"     value={available}   color="#00C07F" />
+              </div>
+
+              {/* Controls row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap' }}>
+                  {typeOptions.map(t => (
+                    <button key={t} onClick={() => setEquipTypeFilter(t)} style={{
+                      background: equipTypeFilter === t ? 'var(--signal)' : 'var(--ink3)',
+                      color: equipTypeFilter === t ? '#000' : 'var(--dim)',
+                      border: '1px solid var(--wire)', padding: '7px 16px',
+                      fontFamily: "'JetBrains Mono',monospace", fontSize: '10px',
+                      letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                    }}>{t}</button>
+                  ))}
+                </div>
+                <button onClick={() => setAddEquipMode(v => !v)} style={{
+                  background: addEquipMode ? 'var(--ink3)' : 'var(--signal)',
+                  color: addEquipMode ? 'var(--dim)' : '#000',
+                  border: addEquipMode ? '1px solid var(--wire)' : 'none',
+                  padding: '9px 22px', fontFamily: "'JetBrains Mono',monospace",
+                  fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase',
+                  fontWeight: 600, cursor: 'pointer',
+                }}>{addEquipMode ? '✕ Cancel' : '+ Add Item'}</button>
+              </div>
+
+              {/* Search */}
+              <div style={{ marginBottom: '14px' }}>
+                <input
+                  type="text"
+                  value={equipSearch}
+                  onChange={e => setEquipSearch(e.target.value)}
+                  placeholder="Search type, model, serial #, person, company…"
+                  style={{ width: '100%', background: 'var(--ink3)', border: '1px solid var(--wire)', color: 'var(--text)', padding: '9px 12px', fontFamily: "'DM Sans',sans-serif", fontSize: '13px', outline: 'none' }}
+                  onFocus={e => e.target.style.borderColor = 'var(--signal)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--wire)'}
+                />
+              </div>
+
+              {/* Add Item form */}
+              {addEquipMode && (
+                <div style={{ background: 'var(--ink3)', border: '1px solid var(--sigborder)', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ ...sectionLabel, marginBottom: '14px' }}>Register New Item</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div>
+                      <div style={{ ...sectionLabel, marginBottom: '4px' }}>Type *</div>
+                      <select value={addEquipForm.itemType} onChange={e => setAddEquipForm(p => ({ ...p, itemType: e.target.value }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                        {ITEM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    {addEquipForm.itemType === 'Other' && (
+                      <div>
+                        <div style={{ ...sectionLabel, marginBottom: '4px' }}>Custom Type</div>
+                        <input value={addEquipForm.customType} onChange={e => setAddEquipForm(p => ({ ...p, customType: e.target.value }))} placeholder="e.g. Tablet" style={inputStyle} />
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ ...sectionLabel, marginBottom: '4px' }}>Model</div>
+                      <input value={addEquipForm.model} onChange={e => setAddEquipForm(p => ({ ...p, model: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ ...sectionLabel, marginBottom: '4px' }}>Serial Number</div>
+                      <input value={addEquipForm.serialNumber} onChange={e => setAddEquipForm(p => ({ ...p, serialNumber: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ ...sectionLabel, marginBottom: '4px' }}>Purchase Date</div>
+                      <input type="date" value={addEquipForm.purchaseDate} onChange={e => setAddEquipForm(p => ({ ...p, purchaseDate: e.target.value }))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ ...sectionLabel, marginBottom: '4px' }}>Condition</div>
+                      <select value={addEquipForm.condition} onChange={e => setAddEquipForm(p => ({ ...p, condition: e.target.value }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                        {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ ...sectionLabel, marginBottom: '4px' }}>Notes</div>
+                    <input value={addEquipForm.notes} onChange={e => setAddEquipForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                  </div>
+                  <button onClick={addEquip} disabled={addEquipSaving} style={{ background: 'var(--signal)', color: '#000', border: 'none', padding: '9px 24px', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, cursor: 'pointer' }}>
+                    {addEquipSaving ? 'Saving…' : 'Register Item'}
+                  </button>
+                </div>
+              )}
+
+              {/* Column header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '28px 1.4fr 1fr 1fr 1fr 1.2fr auto', gap: '12px', padding: '8px 16px', fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--faint)', borderBottom: '1px solid var(--wire)', marginBottom: '4px' }}>
+                <span></span><span>Type / Model</span><span>Serial #</span><span>Condition</span><span>Purchased</span><span>Checked Out To</span><span></span>
+              </div>
+
+              {displayed.length === 0 ? (
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: 'var(--faint)', padding: '60px 0', textAlign: 'center', border: '1px solid var(--wire)' }}>
+                  {equipSearch || equipTypeFilter !== 'All' ? 'No items match your filter.' : 'No equipment registered yet. Add your first item above.'}
+                </div>
+              ) : displayed.map(item => (
+                <EquipmentRow
+                  key={item.id}
+                  item={item}
+                  password={password}
+                  onUpdated={updated => setEquipmentItems(prev => prev.map(e => e.id === updated.id ? { ...e, ...updated } : e))}
+                  onDeleted={id => setEquipmentItems(prev => prev.filter(e => e.id !== id))}
+                />
+              ))}
             </>
           )
         })()}

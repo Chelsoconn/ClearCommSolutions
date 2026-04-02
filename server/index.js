@@ -83,6 +83,30 @@ async function initDb() {
       value        TEXT,
       created_at   TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS equipment (
+      id            SERIAL PRIMARY KEY,
+      item_type     TEXT NOT NULL,
+      custom_type   TEXT,
+      model         TEXT,
+      serial_number TEXT,
+      purchase_date DATE,
+      condition     TEXT DEFAULT 'Good',
+      notes         TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS equipment_checkouts (
+      id            SERIAL PRIMARY KEY,
+      equipment_id  INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+      person_name   TEXT NOT NULL,
+      company       TEXT,
+      inquiry_id    INTEGER REFERENCES inquiries(id) ON DELETE SET NULL,
+      checkout_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      return_date   DATE,
+      notes         TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
   console.log('Database tables ready.');
 }
@@ -569,6 +593,119 @@ app.post('/api/admin/invoices/:id/send-receipt', requireAdmin, async (req, res) 
   } catch (err) {
     console.error('Send receipt error:', err.message);
     res.status(500).json({ error: err.message || 'Failed to send receipt' });
+  }
+});
+
+// ── Equipment ─────────────────────────────────────────────────────────────────
+
+app.get('/api/admin/equipment', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        e.*,
+        co.id          AS checkout_id,
+        co.person_name AS current_person,
+        co.company     AS current_company,
+        co.checkout_date,
+        co.notes       AS checkout_notes
+      FROM equipment e
+      LEFT JOIN equipment_checkouts co
+        ON co.equipment_id = e.id AND co.return_date IS NULL
+      ORDER BY e.created_at DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Equipment fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch equipment' });
+  }
+});
+
+app.post('/api/admin/equipment', requireAdmin, async (req, res) => {
+  try {
+    const { itemType, customType, model, serialNumber, purchaseDate, condition, notes } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO equipment (item_type, custom_type, model, serial_number, purchase_date, condition, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [itemType, customType || null, model || null, serialNumber || null,
+       purchaseDate || null, condition || 'Good', notes || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Equipment create error:', err.message);
+    res.status(500).json({ error: 'Failed to create equipment' });
+  }
+});
+
+app.patch('/api/admin/equipment/:id', requireAdmin, async (req, res) => {
+  try {
+    const { itemType, customType, model, serialNumber, purchaseDate, condition, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE equipment SET item_type=$1, custom_type=$2, model=$3, serial_number=$4,
+       purchase_date=$5, condition=$6, notes=$7 WHERE id=$8 RETURNING *`,
+      [itemType, customType || null, model || null, serialNumber || null,
+       purchaseDate || null, condition || 'Good', notes || null, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Equipment update error:', err.message);
+    res.status(500).json({ error: 'Failed to update equipment' });
+  }
+});
+
+app.delete('/api/admin/equipment/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM equipment WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Equipment delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete equipment' });
+  }
+});
+
+app.get('/api/admin/equipment/:id/checkouts', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM equipment_checkouts WHERE equipment_id=$1 ORDER BY checkout_date DESC, created_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Checkout history error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch checkout history' });
+  }
+});
+
+app.post('/api/admin/equipment/:id/checkout', requireAdmin, async (req, res) => {
+  try {
+    const { personName, company, checkoutDate, notes } = req.body;
+    // close any open checkout first
+    await pool.query(
+      `UPDATE equipment_checkouts SET return_date=CURRENT_DATE WHERE equipment_id=$1 AND return_date IS NULL`,
+      [req.params.id]
+    );
+    const { rows } = await pool.query(
+      `INSERT INTO equipment_checkouts (equipment_id, person_name, company, checkout_date, notes)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.params.id, personName, company || null, checkoutDate || null, notes || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Checkout error:', err.message);
+    res.status(500).json({ error: 'Failed to check out equipment' });
+  }
+});
+
+app.patch('/api/admin/equipment/checkouts/:id/return', requireAdmin, async (req, res) => {
+  try {
+    const { returnDate } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE equipment_checkouts SET return_date=$1 WHERE id=$2 RETURNING *`,
+      [returnDate || null, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Return error:', err.message);
+    res.status(500).json({ error: 'Failed to return equipment' });
   }
 });
 
